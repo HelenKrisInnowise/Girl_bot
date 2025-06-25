@@ -1,87 +1,84 @@
 ```markdown
-# Добро пожаловать в проект Girls Chatbot Demo!
+# Girls Chatbot Demo Project!
 
-Этот проект представляет собой демонстрационное приложение чат-бота, построенное на Streamlit. Чат-бот использует модели Azure DeepAI через LangChain для генерации ответов, управляет контекстом разговора с помощью Mem0 и поддерживает динамически генерируемые профили персон, а также анализирует настроение и намерения пользователя для создания более дружелюбного и поддерживающего взаимодействия.
+This project is a demonstration chatbot application built with Streamlit. The chatbot uses Azure DeepAI models via LangChain for response generation, manages conversation context with Mem0, and supports dynamically generated profiles for users, as well as analyzing user mood and intentions to create a more friendly and supportive interaction.
 
-## Особенности проекта
-- **Динамическая Генерация Персоны:** Вы можете настроить личность чат-бота, выбирая основные черты характера, уровень формальности и стиль общения через боковую панель.
+## Project Features
+- **Dynamic Persona Generation:** You can customize the chatbot's personality by selecting main character traits, formality level, and communication style via the sidebar.
 
-- **Анализ Настроения и Намерения:** Бот анализирует ваши сообщения, чтобы определить ваше настроение и намерения, адаптируя свои ответы для более эмпатичного взаимодействия.
+- **Mood and Intent Analysis:** The bot analyzes your messages to determine your mood and intentions, adapting its responses for more empathetic interactions.
 
-- **Управление Памятью с Mem0:** Использует Mem0 для хранения ключевой информации из разговоров, такой как личные данные пользователя, интересы, предпочтения и история настроения. Это позволяет боту "помнить" вас и использовать эту информацию для контекстных ответов.
+- **Memory Management with Mem0:** Uses Mem0 to store key information from conversations, such as personal user data, interests, preferences, and mood history. This allows the bot to "remember" you and use this information for contextual responses.
 
-- **Профиль Пользователя:** Возможность сгенерировать/обновить сводный профиль пользователя на основе сохраненных воспоминаний.
+- **User Profile:** Ability to generate/update a summarized user profile based on stored memories.
 
-- **Предложение Тем для Разговора:** Функция предложения тем для разговора на основе ваших предыдущих предпочтений.
+- **Conversation Topic Suggestions:** Feature that suggests discussion topics based on your previous preferences.
 
-- **История Изменений Настроения:** Визуализация изменения настроения пользователя на графике.
+- **Mood Change History:** Visualization of your mood changes over time on a graph.
 
-## Предварительные условия
-Для запуска проекта вам потребуется:
+## Prerequisites
+To run the project, you will need:
 
 - Python 3.11+
 
-- uv: Инструмент для управления пакетами Python. Если у вас его нет, установите:
+- uv: A tool for managing Python packages. If you don't have it, install with:
 
 ```bash
 pip install uv
 ```
 
-## Установка проекта
-Клонируйте репозиторий (если применимо):
+## Project Installation
+Clone the repository (if applicable):
 
 ```bash
-git clone <URL_ВАШЕГО_РЕПОЗИТОРИЯ>
+git clone <YOUR_REPOSITORY_URL>
 cd girl-bot
 ```
 
-(Если вы уже находитесь в папке проекта `girl-bot`, пропустите этот шаг)
+(If you're already in the `girl-bot` folder, skip this step)
 
-Установите зависимости с помощью uv:
-Перейдите в корневую директорию проекта, где находится `pyproject.toml`, и выполните:
+Install dependencies using uv:
+Navigate to the root directory where `pyproject.toml` is located and run:
 
 ```bash
 uv pip install -e .
 ```
 
-Эта команда установит все необходимые зависимости, перечисленные в `pyproject.toml`, включая `mem0ai`, `langchain`, `langchain_openai`, `streamlit`, `pydantic`, `python-dotenv`, `pandas`, `altair`.
+This will install all required dependencies listed in `pyproject.toml`, including `mem0ai`, `langchain`, `langchain_openai`, `streamlit`, `pydantic`, `python-dotenv`, `pandas`, `altair`.
 
-## Настройка переменных окружения (.env)
-Создайте файл с именем `.env` в корневой директории вашего проекта `girl-bot`. Этот файл будет содержать ваши API-ключи и данные для подключения к службам.
+## Setting Up Environment Variables (.env)
+Create a file named `.env` in the root directory of your project (`girl-bot`). This file will contain your API keys and service connection details.
 
-Пример содержимого `.env`:
+Example `.env` content:
 
 ```env
-OPENAI_API_KEY=
-OPENAI_API_ENDPOINT=
-OPENAI_MODEL_DEPLOYMENT_NAME=
-OPENAI_MODEL=
-MEM0_API_KEY=
+OPENAI_API_KEY="YOUR_AZURE_OPENAI_API_KEY"
+OPENAI_API_ENDPOINT="YOUR_AZURE_OPENAI_ENDPOINT"
+OPENAI_MODEL_DEPLOYMENT_NAME="YOUR_AZURE_OPENAI_DEPLOYMENT_NAME"
+OPENAI_MODEL="OPENAI_MODEL" 
+MEM0_API_KEY="YOUR_MEM0_API_KEY"
 ```
 
-## Запуск Streamlit приложения
-После установки зависимостей и настройки файла `.env` выполните:
+## Running the Streamlit App
+After installing dependencies and setting up the `.env` file, run:
 
 ```bash
 streamlit run app.py
 ```
 
-Это откроет приложение в вашем браузере, обычно по адресу [http://localhost:8501](http://localhost:8501).
+This will open the application in your browser, typically at [http://localhost:8501](http://localhost:8501).
 
-## Использование приложения
-- **Настройка Персоны:** Используйте элементы управления в боковой панели (слева), чтобы выбрать "Main Character Traits", "Formality Level" и "Communication Style".
+## Using the Application
+- **Configure Persona:** Use the controls in the sidebar (left) to select "Main Character Traits," "Formality Level," and "Communication Style."
 
-- **Генерация Персоны:** Нажмите кнопку **"Generate Persona"** в боковой панели, чтобы бот принял новую личность. Разговор будет сброшен.
+- **Generate Persona:** Click the **"Generate Persona"** button in the sidebar to reset the bot's personality. The conversation will be reset.
 
-- **Чат:** Введите сообщения в поле ввода внизу экрана.
+- **Chat:** Type your messages in the input field at the bottom of the screen.
 
-- **Профиль Пользователя:** Поговорите с ботом о себе (ваше имя, интересы, предпочтения). Затем нажмите **"Show/Update My Profile"** в боковой панели, чтобы увидеть сводку вашего профиля, сгенерированную на основе воспоминаний Mem0.
+- **User Profile:** Talk to the bot about yourself (your name, interests, preferences). Then click **"Show/Update My Profile"** in the sidebar to view your summarized profile generated from Mem0 memories.
 
-- **Предложение Тем для Разговора:** Нажмите **"Suggest a Topic"** в боковой панели, чтобы бот предложил тему для разговора на основе ваших предыдущих предпочтений.
+- **Suggest Conversation Topics:** Click **"Suggest a Topic"** in the sidebar for the bot to recommend a conversation topic based on your previous preferences.
 
-- **История Изменений Настроения:** Нажмите **"Show Mood History"** в боковой панели, чтобы увидеть график изменения вашего настроения с течением времени.
+- **Mood Change History:** Click **"Show Mood History"** in the sidebar to view a graph of your mood fluctuations over time.
 
 ---
-
-**Надеемся, вам понравится использовать Girls Chatbot Demo!**
-```

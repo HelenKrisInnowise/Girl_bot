@@ -2,23 +2,21 @@ import streamlit as st
 import uuid
 import os
 from dotenv import load_dotenv
-import pandas as pd # Import pandas for data manipulation
-import altair as alt # Import altair for charting
+import pandas as pd 
+import altair as alt 
 from datetime import datetime
 
-# Import components from submodules
+
 from modules.mem0_config import mem0_client
-from modules.profiles import MAIN_CHARACTER_TRAITS, FORMALITY_LEVELS, COMMUNICATION_STYLES # Import dynamic profile options
-from modules.pydantic_models import MoodAttributes, IntentAttributes # Only import Mood and Intent
+from modules.profiles import MAIN_CHARACTER_TRAITS, FORMALITY_LEVELS, COMMUNICATION_STYLES 
+from modules.pydantic_models import MoodAttributes, IntentAttributes 
 from modules.llm_setup import llm, mood_llm, intent_llm, get_system_prompt_template, generate_dynamic_profile, DynamicProfileOutput, get_user_personal_profile, suggest_conversation_topic # Import DynamicProfileOutput from llm_setup
 from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
-from pydantic import BaseModel # Import BaseModel for type checking
+from pydantic import BaseModel
 
-# --- 0. Project Setup: Load Environment Variables ---
+
 load_dotenv()
 
-# Environment variables are checked in llm_setup.py and mem0_config.py,
-# but a general check here for critical ones is still good.
 if not all([os.getenv("OPENAI_API_KEY"), os.getenv("OPENAI_API_ENDPOINT"),
             os.getenv("OPENAI_MODEL_DEPLOYMENT_NAME"), os.getenv("MEM0_API_KEY")]):
     st.error("Please ensure all required environment variables are set in your .env file.")
