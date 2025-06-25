@@ -1,0 +1,23 @@
+[project]
+name = "girl-bot"
+version = "0.1.0"
+description = "Chat bot with girls"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "mem0ai",
+    "langchain",
+    "langchain_openai",
+    "langchain-community",
+    "streamlit",
+    "pydantic",
+    "python-dotenv",   
+    ]
+
+[tool.uv]
+dev-dependencies = [
+    "ipython",
+    "black",
+    "isort",
+    "pytest",
+]
