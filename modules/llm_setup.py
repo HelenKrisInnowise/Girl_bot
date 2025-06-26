@@ -2,8 +2,7 @@
 import os
 from dotenv import load_dotenv
 from langchain_openai import AzureChatOpenAI
-
-from modules.pydantic_models import MoodAttributes, IntentAttributes, UserProfile
+from modules.pydantic_models import MoodAttributes, IntentAttributes, UserProfile, ControversialTopicAttributes 
 from pydantic import BaseModel, Field 
 from typing import List
 
@@ -15,16 +14,17 @@ OPENAI_MODEL_DEPLOYMENT_NAME = os.getenv("OPENAI_MODEL_DEPLOYMENT_NAME")
 OPENAI_MODEL = os.getenv("OPENAI_MODEL")
 LLM_AZURE_API_VERSION = os.getenv("OPENAI_API_VERSION")
 
+
 if not all([OPENAI_API_KEY, OPENAI_API_ENDPOINT, OPENAI_MODEL_DEPLOYMENT_NAME, OPENAI_MODEL]):
     raise ValueError("One or more Azure OpenAI environment variables are not set.")
 
-
+# Main LLM for generating chatbot responses
 llm = AzureChatOpenAI(
     azure_deployment=OPENAI_MODEL_DEPLOYMENT_NAME,
     api_key=OPENAI_API_KEY,
     azure_endpoint=OPENAI_API_ENDPOINT,
     api_version=LLM_AZURE_API_VERSION,
-    temperature=0.7 
+    temperature=0.7
 )
 
 # LLMs for structured output (mood and intent detection)
@@ -41,6 +41,9 @@ profile_generator_llm = llm.with_structured_output(DynamicProfileOutput, method=
 
 # LLM for generating user profile summary from Mem0 data
 user_profile_llm = llm.with_structured_output(UserProfile, method="function_calling", include_raw=False)
+
+# New LLM for controversial topic detection
+controversial_llm = llm.with_structured_output(ControversialTopicAttributes, method="function_calling", include_raw=True)
 
 def generate_dynamic_profile(traits: list[str], formality: str, style: str) -> dict:
     """
@@ -120,11 +123,41 @@ def suggest_conversation_topic(topic_memories: List[dict]) -> str:
     Example: "Since you mentioned your love for space exploration, how about we dive into the latest Mars rover discoveries?"
     """
     try:
-        suggestion_response = llm.invoke(prompt) 
+        suggestion_response = llm.invoke(prompt) # Use main LLM for a natural language suggestion
         return suggestion_response.content
     except Exception as e:
         print(f"Error suggesting topic: {e}")
         return "I'm having a bit of trouble coming up with a new topic right now. Is there anything specific you'd like to talk about?"
+
+def detect_controversial_topic(text: str) -> dict:
+    """
+    Detects if the given text discusses a controversial topic (politics, religion, sexual, violence, hate speech).
+    Returns a dictionary conforming to ControversialTopicAttributes.
+    """
+    prompt = f"""
+    Analyze the following user message to determine if it discusses a controversial topic.
+    Controversial topics include: politics, religion, sexual content, violence, hate speech.
+
+    Message: "{text}"
+
+    Output should strictly adhere to the ControversialTopicAttributes Pydantic model.
+    - Set 'is_controversial' to True if a controversial topic is detected.
+    - Set 'category' to the primary controversial category (e.g., 'politics', 'religion', 'sexual', 'violence', 'hate_speech'). If multiple, pick the most dominant. If not controversial, set to 'none'.
+    - Provide a brief 'reason' if it is controversial.
+    """
+    try:
+        controversial_analysis_raw = controversial_llm.invoke(prompt)
+        if isinstance(controversial_analysis_raw, dict) and 'parsed' in controversial_analysis_raw and isinstance(controversial_analysis_raw['parsed'], BaseModel):
+            return controversial_analysis_raw['parsed'].model_dump()
+        elif isinstance(controversial_analysis_raw, BaseModel):
+            return controversial_analysis_raw.model_dump()
+        else:
+            print(f"Warning: Controversial analysis result not a recognizable Pydantic model or dict with 'parsed'. Type: {type(controversial_analysis_raw)}")
+            return {"is_controversial": False, "category": "none", "reason": "Parsing issue or unknown format."}
+    except Exception as e:
+        print(f"Error during controversial topic detection: {e}")
+        return {"is_controversial": False, "category": "none", "reason": f"Detection failed: {e}"}
+
 
 # System prompt template for adaptive response generation
 def get_system_prompt_template():
