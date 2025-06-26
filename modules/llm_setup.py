@@ -86,14 +86,14 @@ def get_user_personal_profile(user_memories: List[dict]) -> dict:
     """
     if not user_memories:
         return {"name": None, "interests": [], "preferences": [], "summary": "No personal information found."}
-
-    memories_text = "\n".join([m['memory'] for m in user_memories])
+    print(user_memories)
+    # memories_text = "\n".join([m['memory'] for m in user_memories])
     prompt = f"""
     Based on the following fragmented user memories, synthesize a coherent User Personal Profile.
     Extract the user's name, a list of their main interests, a list of other general preferences, and a brief overall summary.
 
     User Memories:
-    {memories_text}
+    {user_memories}
 
     Output should strictly adhere to the UserProfile Pydantic model.
     """
@@ -104,30 +104,38 @@ def get_user_personal_profile(user_memories: List[dict]) -> dict:
         print(f"Error generating user personal profile: {e}")
         return {"name": None, "interests": [], "preferences": [], "summary": f"Could not generate profile: {e}"}
 
-def suggest_conversation_topic(topic_memories: List[dict]) -> str:
+# Renamed and re-purposed function
+def generate_proactive_query(recent_memories: List[dict]) -> str:
     """
-    Suggests a conversation topic based on a list of preferred topics from Mem0.
+    Generates a proactive and empathetic query to re-engage the user,
+    based on recent life events and daily routines from Mem0.
     """
-    if not topic_memories:
-        return "It seems we haven't discussed your favorite topics yet! What's on your mind today?"
+    if not recent_memories:
+        return "It's been a while! How are you doing today? Anything new or interesting happening?"
 
-    topics_list = [m['memory'] for m in topic_memories]
+    # Extract memory content and format it for the prompt
+    memories_content = "\n".join([f"- {m['memory']}" for m in recent_memories])
+
     prompt = f"""
-    Based on the following list of topics the user has expressed interest in, suggest one interesting conversation topic.
-    Make the suggestion sound natural and engaging, fitting a friendly chatbot persona.
-    Do not just list the topics. Suggest one specific, engaging topic.
+    Based on the following recent memories about the user's life events and daily routines,
+    formulate a message with a question or a phrase implying a response.
+    The goal is to proactively and empathetically re-engage the user, as if you haven't chatted for a while.
+    Make the message sound natural, friendly, and caring.
 
-    User's Preferred Topics:
-    {', '.join(topics_list)}
+    Recent User Memories (from last 10 days):
+    {memories_content}
 
-    Example: "Since you mentioned your love for space exploration, how about we dive into the latest Mars rover discoveries?"
+    Example of desired output:
+    "Hey! I was just thinking about you. How's that new project going that you mentioned?"
+    "It's been a bit quiet! Hope you're doing well. Did you get a chance to try that new recipe you were excited about?"
+    "Long time no chat! How are things with your morning runs these days? Still enjoying them?"
     """
     try:
-        suggestion_response = llm.invoke(prompt) # Use main LLM for a natural language suggestion
-        return suggestion_response.content
+        proactive_response = llm.invoke(prompt) # Use main LLM for a natural language suggestion
+        return proactive_response.content
     except Exception as e:
-        print(f"Error suggesting topic: {e}")
-        return "I'm having a bit of trouble coming up with a new topic right now. Is there anything specific you'd like to talk about?"
+        print(f"Error generating proactive query: {e}")
+        return "It's been a while! How are you doing today? Anything new or interesting happening?"
 
 def detect_controversial_topic(text: str) -> dict:
     """

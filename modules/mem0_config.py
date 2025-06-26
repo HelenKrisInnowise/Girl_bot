@@ -14,30 +14,83 @@ os.environ["LLM_AZURE_API_VERSION"] = os.getenv("OPENAI_API_VERSION")
 
 # Define custom categories for Mem0
 MEM0_CUSTOM_CATEGORIES = [
+    {"personal_details": "Tracks user's name, age, gender, location, occupation, or any other direct personal identification."},
+    {"intimate_life": "Details about user's romantic/sexual relationships, preferences, and experiences (only if explicitly mentioned)."},
     {"user_interests": "Tracks user's hobbies, passions, and preferred activities."},
-    {"preferred_conversation_topics": "Records subjects or themes the user explicitly expresses interest in discussing."},
-    {"chatbot_interactions": "Memories related to how the user interacts with the chatbot itself or its functionalities."},
-    {"user_preferences": "General preferences or dislikes mentioned by the user."},
-    {"user_mood": "Tracks the user's emotional state, including detected mood and its intensity, and reasons for their mood."}
+    {"user_preferences": "General preferences or dislikes mentioned by the user (excluding intimate preferences)."},
+    {"user_mood": "Tracks the user's emotional state including detected mood, its intensity, and reasons."},
+    {"life_events": "Significant personal milestones like graduations, relocations, career changes (excluding intimate events)."},
+    {"professional_details": "Information about user's current job, position, company, salary, work schedule."},
+    {"daily_routine": "Information about user's regular schedule, habits, and daily activities."},
+    {"achievements": "User's accomplishments in any area (professional, personal, sports, etc.)."},
+    {"challenges": "Difficulties or problems the user is currently facing or has overcome."},
+    {"future_plans": "User's goals, dreams, and plans for near or distant future."},
+    {"relationships": "Information about user's family, friends, and social circle (excluding romantic/sexual partners)."},
+    {"opinions": "User's views and beliefs on various topics (politics, ethics, philosophy, etc.)."},
+    {"learning": "Topics/skills the user is currently learning or wants to learn."},
+    {"favorites": "User's favorite items in different categories (books, movies, brands, etc.)."},
+    {"pet_peeves": "Things that consistently annoy or bother the user."},
+    {"bucket_list": "Things the user wants to experience or achieve in their lifetime."},
+    {"health": "User's physical and mental health information, excluding sexual health."},
+    {"sexual_health": "User's sexual wellbeing, preferences, and related health matters (if explicitly mentioned)."}
 ]
 
-# Define custom instructions for Mem0's internal processing
 MEM0_CUSTOM_INSTRUCTIONS = """
-Your Task: Accurately extract and categorize information from user conversations.
+Your Task: Accurately extract and categorize information from user conversations with special attention to sensitive topics.
 
-Guidelines for Categorization:
-- **personal_details**: Extract and store the user's name, age, gender, location, occupation, or any other direct personal identification.
-- **user_interests**: Identify and categorize any hobbies, passions, or activities the user mentions enjoying or being interested in (e.g., "I love playing guitar," "I'm into astronomy").
-- **preferred_conversation_topics**: Extract and categorize any topics or subjects the user explicitly indicates they enjoy discussing or want to talk about more (e.g., "Let's talk about AI," "I'm interested in philosophy").
-- **user_preferences**: Capture any general likes, dislikes, or opinions the user expresses (e.g., "I prefer coffee over tea," "I don't like horror movies").
-- **chatbot_interactions**: Note down feedback or observations about the chatbot's behavior or functionality.
-- **user_mood**: Identify the user's emotional state (e.g., joyful, sad, angry, neutral) and its intensity, as well as the likely reasons for that mood, if expressed. Store a concise summary of the mood detected in the user's message.
+Enhanced Categorization Guidelines:
 
-Important:
-- Be precise and concise in the 'memory' field.
-- Do not make assumptions. Only categorize information explicitly stated or strongly implied.
-- Overwrite previous memories if new information contradicts old, for the same type of detail (e.g., if user changes their favorite color).
+Personal Domain:
+- **personal_details**: Name, age, gender, physical characteristics, location, contact details.
+- **relationships**: Family members, friends, colleagues; nature of platonic relationships.
+- **life_events**: Non-intimate milestones like graduations, relocations, career changes.
+- **daily_routine**: Typical day structure excluding intimate activities.
+
+Intimate Domain (handle with extra sensitivity):
+- **intimate_life**: Current/past romantic/sexual relationships, dating preferences, orientation.
+- **sexual_health**: Sexual wellbeing, preferences, contraceptive methods, related issues.
+
+Professional Domain:
+- **professional_details**: Current job, position, company, salary, work schedule.
+- **achievements**: Promotions, awards, completed projects, publications.
+- **challenges**: Work problems, difficult projects, conflicts at workplace.
+- **future_plans**: Career goals, desired positions, retirement plans.
+
+Leisure Domain:
+- **user_interests**: Hobbies, sports, creative activities, club memberships.
+- **travel**: Past trips, dream destinations, travel preferences.
+- **entertainment**: Favorite shows, books, games, content preferences.
+
+Personal Development:
+- **learning**: Courses, skills being acquired, educational goals.
+- **health**: General health, exercise, diets, medical conditions (excluding sexual health).
+- **bucket_list**: Life goals and experiences user wants to have.
+
+Preferences and Identity:
+- **user_preferences**: Likes/dislikes (food, music, etc. excluding intimate preferences).
+- **opinions**: Stances on social issues, political views, ethical beliefs.
+- **favorites**: Preferred brands, colors, styles, artists, etc.
+- **pet_peeves**: Specific annoyances and irritants.
+
+Emotional Domain:
+- **user_mood**: Current emotional state with context and intensity.
+- **milestones**: Emotional significant events and their impact.
+
+Special Handling Rules:
+1. Context Sensitivity: Relationship status goes to:
+   - 'relationships' if mentioned casually ("my friend X")
+   - 'intimate_life' if romantic/sexual context ("my partner X")
+2. Health Separation: General health vs sexual health must be strictly divided.
+3. Preference Grading: Store intimacy-related preferences only in 'intimate_life' category.
+
+Additional General Rules:
+1. Temporal Tagging: Always note timeframe for sensitive information.
+2. Confidence Scoring: For intimate categories, require higher certainty.
+3. Relationship Mapping: Clearly distinguish platonic vs intimate relations.
+4. Contradiction Resolution: For sensitive data, keep historical versions longer.
+
 """
+# 6. Overwrite previous memories if new information contradicts old, for the same type of detail (e.g., if user changes their favorite color).
 
 
 # Configuration for Mem0's internal LLM to use Azure OpenAI

@@ -4,13 +4,13 @@ import os
 from dotenv import load_dotenv
 import pandas as pd
 import altair as alt
-from datetime import datetime
+from datetime import datetime, timedelta # Import timedelta for date calculation
 
 # Import components from submodules
 from modules.mem0_config import mem0_client
 from modules.profiles import MAIN_CHARACTER_TRAITS, FORMALITY_LEVELS, COMMUNICATION_STYLES
-from modules.pydantic_models import MoodAttributes, IntentAttributes, UserProfile, ControversialTopicAttributes # Import new ControversialTopicAttributes
-from modules.llm_setup import llm, mood_llm, intent_llm, get_system_prompt_template, generate_dynamic_profile, DynamicProfileOutput, get_user_personal_profile, suggest_conversation_topic, detect_controversial_topic # Import new function
+from modules.pydantic_models import MoodAttributes, IntentAttributes, UserProfile, ControversialTopicAttributes
+from modules.llm_setup import llm, mood_llm, intent_llm, get_system_prompt_template, generate_dynamic_profile, DynamicProfileOutput, get_user_personal_profile, generate_proactive_query, detect_controversial_topic # Updated import for generate_proactive_query
 from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
 from pydantic import BaseModel
 
@@ -74,6 +74,7 @@ if "mem0_session_id" not in st.session_state:
     st.session_state.current_intent = None
     st.session_state.user_profile_summary = None
     st.session_state.mood_history_data = None
+    st.session_state.proactive_query_suggestion = None
 
     try:
         mem0_client.add(messages=[
@@ -145,12 +146,25 @@ st.sidebar.subheader("User Personal Profile")
 if st.sidebar.button("Show/Update My Profile"):
     with st.spinner("Fetching and summarizing your profile from memory..."):
         try:
-            personal_memories = mem0_client.search(
-                query="personal information about the user, user's interests, hobbies, and preferences",
-                user_id=st.session_state.mem0_session_id,
-                categories=["personal_details", "user_interests", "user_preferences"],
-                limit=10
-            )
+            # Define filters for Mem0 to retrieve user profile related categories
+            # Using OR to include multiple categories, each with 'contains' operator
+            profile_filters = {
+                "AND": [
+                    {"user_id": st.session_state.mem0_session_id},
+                    {"OR": [
+                        {"categories": {"contains": "personal_details"}},
+                        {"categories": {"contains": "user_interests"}},
+                        {"categories": {"contains": "user_preferences"}},
+                        {"categories": {"contains": "relationships"}},
+                        {"categories": {"contains": "opinions"}}
+                    ]}
+                ]
+            }
+
+            # Use get_all with filters to retrieve relevant profile memories
+            # Ensure version="v2" for filter support. Using page_size=30 as requested.
+            personal_memories = mem0_client.get_all(version="v2", filters=profile_filters, page_size=30)
+            
             st.session_state.user_profile_summary = get_user_personal_profile(personal_memories)
             st.sidebar.success("User profile updated!")
         except Exception as e:
@@ -168,21 +182,51 @@ else:
 
 # --- Suggest a Topic Section ---
 st.sidebar.markdown("---")
-st.sidebar.subheader("Conversation Topics")
+st.sidebar.subheader("Re-engagement Tools") # Renamed subheader
 
-if st.sidebar.button("Suggest a Topic"):
-    with st.spinner("Thinking of a topic based on our past conversations..."):
+if st.sidebar.button("Generate Proactive Query"): # Renamed button
+    with st.spinner("Thinking of a way to re-engage..."):
         try:
-            topic_memories = mem0_client.search(
-                query="suggest a conversation topic based on my preferred topics",
-                user_id=st.session_state.mem0_session_id,
-                categories=["preferred_conversation_topics"],
-                limit=5
-            )
-            suggested_topic = suggest_conversation_topic(topic_memories)
-            st.sidebar.info(f"**Suggested Topic:** {suggested_topic}")
+            # Calculate date 10 days ago for filtering
+            ten_days_ago = datetime.now() - timedelta(days=10)
+            # Format for Mem0: ISO 8601 with 'Z' for UTC or explicit timezone.
+            # Stripping microseconds and then adding 'Z' is a robust way if original string doesn't have TZ.
+            ten_days_ago_iso = ten_days_ago.isoformat(timespec='seconds') + 'Z' 
+
+            # Define filters for Mem0
+            # filters = {
+            #     "AND": [
+            #         {"user_id": st.session_state.mem0_session_id},
+            #         {"created_at": {"gte": ten_days_ago_iso}},
+            #         {"categories": {"contains": "life_events"}} # Filter by new categories
+            #     ]
+            # }
+            filters = {
+                "AND": [
+                    {"user_id": st.session_state.mem0_session_id},
+                    {"created_at": {"gte": ten_days_ago_iso}},
+                    # CORRECTED: Use 'OR' to allow 'contains' operator to check for either category as a string
+                    {"OR": [
+                        {"categories": {"contains": "life_events"}},
+                        {"categories": {"contains": "daily_routine"}}
+                    ]}
+                ]
+            }
+            # Use get_all with filters to retrieve relevant memories
+            # Ensure version="v2" for filter support
+            recent_relevant_memories = mem0_client.get_all(version="v2", filters=filters, page_size=15) # limit to 10 for prompt context
+            
+            # Use LLM to generate proactive query
+            proactive_query = generate_proactive_query(recent_relevant_memories) # Call the renamed function
+            st.session_state.proactive_query_suggestion = proactive_query # Store in session state
+            st.sidebar.info(f"**Proactive Query Suggestion:** {proactive_query}") # Display the suggestion
         except Exception as e:
-            st.sidebar.error(f"Error suggesting topic: {e}")
+            st.sidebar.error(f"Error generating proactive query: {e}")
+            st.session_state.proactive_query_suggestion = None
+
+# Optionally display the proactive query suggestion if it's already in session state
+if st.session_state.proactive_query_suggestion:
+    st.sidebar.markdown(f"**Last Proactive Query:** {st.session_state.proactive_query_suggestion}")
 
 # --- Mood History Section ---
 st.sidebar.markdown("---")
