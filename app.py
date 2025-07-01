@@ -4,26 +4,26 @@ import os
 from dotenv import load_dotenv
 import pandas as pd
 import altair as alt
-from datetime import datetime, timedelta # Import timedelta for date calculation
+from datetime import datetime, timedelta
 
 # Import components from submodules
-from modules.mem0_config import mem0_client
+from modules.mem0_config import mem0_client, graph_mem0_client 
 from modules.profiles import MAIN_CHARACTER_TRAITS, FORMALITY_LEVELS, COMMUNICATION_STYLES
 from modules.pydantic_models import MoodAttributes, IntentAttributes, UserProfile, ControversialTopicAttributes
-from modules.llm_setup import llm, mood_llm, intent_llm, get_system_prompt_template, generate_dynamic_profile, DynamicProfileOutput, get_user_personal_profile, generate_proactive_query, detect_controversial_topic # Updated import for generate_proactive_query
+from modules.llm_setup import generate_proactive_query, llm, mood_llm, intent_llm, get_system_prompt_template, generate_dynamic_profile, DynamicProfileOutput, get_user_personal_profile, generate_proactive_query_graph, detect_controversial_topic
 from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
 from pydantic import BaseModel
 
 # --- 0. Project Setup: Load Environment Variables ---
 load_dotenv()
 
-if not all([os.getenv("OPENAI_API_KEY"), os.getenv("OPENAI_API_ENDPOINT"),
-            os.getenv("OPENAI_MODEL_DEPLOYMENT_NAME"), os.getenv("MEM0_API_KEY")]):
-    st.error("Please ensure all required environment variables are set in your .env file.")
+if not all([os.getenv("OPENAI_API_KEY"),os.getenv("MEM0_API_KEY"),
+            os.getenv("NEO4J_URI"), os.getenv("NEO4J_USERNAME"), os.getenv("NEO4J_PASSWORD")]):
+    st.error("Please ensure all required environment variables are set in your .env file, including Neo4j credentials.")
     st.stop()
 
 # --- Streamlit UI Setup ---
-st.set_page_config(page_title="Girls Chatbot Demo", layout="centered")
+st.set_page_config(page_title="Girls Chatbot Demo (Neo4j Graph Memory)", layout="centered")
 st.markdown(
     """
     <style>
@@ -51,7 +51,7 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-st.title("Girls Chatbot Demo")
+st.title("Girls Chatbot Demo (Neo4j Graph Memory)") # Updated title
 
 # --- Mood Mapping for Visualization ---
 MOOD_SCORE_MAP = {
@@ -75,14 +75,16 @@ if "mem0_session_id" not in st.session_state:
     st.session_state.user_profile_summary = None
     st.session_state.mood_history_data = None
     st.session_state.proactive_query_suggestion = None
+    st.session_state.suggested_topic_query = None # New state for suggested topic
 
     try:
+        # Initial add to Mem0 will now use Graph Memory configured in modules/mem0_config.py
         mem0_client.add(messages=[
             {"role": "assistant", "content": "I am a chatbot designed to embody various girl personas. Use the sidebar to configure my personality!"}
         ], user_id=st.session_state.mem0_session_id)
-        st.info("Initial memory added to Mem0 for this session.")
+        st.info("Initial memory added to Mem0 (with Graph Memory) for this session.")
     except Exception as e:
-        st.warning(f"Could not add initial memory to Mem0: {e}")
+        st.warning(f"Could not add initial memory to Mem0 (Graph Memory): {e}")
 
 # --- Dynamic Profile Selection UI in Sidebar ---
 st.sidebar.header("Configure Chatbot Persona")
@@ -122,13 +124,16 @@ if st.sidebar.button("Generate Persona"):
             st.session_state.mem0_session_id = str(uuid.uuid4())
             st.session_state.user_profile_summary = None
             st.session_state.mood_history_data = None
+            st.session_state.proactive_query_suggestion = None
+            st.session_state.proactive_query_suggestion_vector = None
+            st.session_state.suggested_topic_query = None
             try:
                 mem0_client.add(messages=[
                     {"role": "assistant", "content": f"Hello! I am now embodying a new persona: {st.session_state.dynamic_profile['description']}"}
                 ], user_id=st.session_state.mem0_session_id)
-                st.info("New persona generated and initial memory added to Mem0.")
+                st.info("New persona generated and initial memory added to Mem0 (Graph Memory).")
             except Exception as e:
-                st.warning(f"Could not add initial memory to Mem0 for new persona: {e}")
+                st.warning(f"Could not add initial memory to Mem0 (Graph Memory) for new persona: {e}")
             st.sidebar.success("Persona updated! Conversation reset.")
 
 st.sidebar.markdown("---")
@@ -146,8 +151,6 @@ st.sidebar.subheader("User Personal Profile")
 if st.sidebar.button("Show/Update My Profile"):
     with st.spinner("Fetching and summarizing your profile from memory..."):
         try:
-            # Define filters for Mem0 to retrieve user profile related categories
-            # Using OR to include multiple categories, each with 'contains' operator
             profile_filters = {
                 "AND": [
                     {"user_id": st.session_state.mem0_session_id},
@@ -160,9 +163,6 @@ if st.sidebar.button("Show/Update My Profile"):
                     ]}
                 ]
             }
-
-            # Use get_all with filters to retrieve relevant profile memories
-            # Ensure version="v2" for filter support. Using page_size=30 as requested.
             personal_memories = mem0_client.get_all(version="v2", filters=profile_filters, page_size=30)
             
             st.session_state.user_profile_summary = get_user_personal_profile(personal_memories)
@@ -180,32 +180,21 @@ if st.session_state.user_profile_summary:
 else:
     st.sidebar.info("Click 'Show/Update My Profile' to generate your personal profile based on past conversations.")
 
-# --- Suggest a Topic Section ---
+# --- Conversation Tools Section ---
 st.sidebar.markdown("---")
-st.sidebar.subheader("Re-engagement Tools") # Renamed subheader
+st.sidebar.subheader("Conversation Tools")
 
-if st.sidebar.button("Generate Proactive Query"): # Renamed button
+if st.sidebar.button("Generate Proactive Query Vector"): # Renamed button
     with st.spinner("Thinking of a way to re-engage..."):
         try:
             # Calculate date 10 days ago for filtering
             ten_days_ago = datetime.now() - timedelta(days=10)
-            # Format for Mem0: ISO 8601 with 'Z' for UTC or explicit timezone.
-            # Stripping microseconds and then adding 'Z' is a robust way if original string doesn't have TZ.
-            ten_days_ago_iso = ten_days_ago.isoformat(timespec='seconds') + 'Z' 
 
-            # Define filters for Mem0
-            # filters = {
-            #     "AND": [
-            #         {"user_id": st.session_state.mem0_session_id},
-            #         {"created_at": {"gte": ten_days_ago_iso}},
-            #         {"categories": {"contains": "life_events"}} # Filter by new categories
-            #     ]
-            # }
+            ten_days_ago_iso = ten_days_ago.isoformat(timespec='seconds') + 'Z' 
             filters = {
                 "AND": [
                     {"user_id": st.session_state.mem0_session_id},
                     {"created_at": {"gte": ten_days_ago_iso}},
-                    # CORRECTED: Use 'OR' to allow 'contains' operator to check for either category as a string
                     {"OR": [
                         {"categories": {"contains": "life_events"}},
                         {"categories": {"contains": "daily_routine"}}
@@ -218,15 +207,32 @@ if st.sidebar.button("Generate Proactive Query"): # Renamed button
             
             # Use LLM to generate proactive query
             proactive_query = generate_proactive_query(recent_relevant_memories) # Call the renamed function
-            st.session_state.proactive_query_suggestion = proactive_query # Store in session state
+            st.session_state.proactive_query_suggestion_vector = proactive_query # Store in session state
             st.sidebar.info(f"**Proactive Query Suggestion:** {proactive_query}") # Display the suggestion
         except Exception as e:
             st.sidebar.error(f"Error generating proactive query: {e}")
+            st.session_state.proactive_query_suggestion_vector = None
+
+# Display the last proactive query suggestion
+if st.session_state.proactive_query_suggestion:
+    st.sidebar.markdown(f"**Last Proactive Query:** {st.session_state.proactive_query_suggestion_vector}")
+    
+# --- 2. Generate Proactive Query on personal Graph memory (NEW button) ---
+if st.sidebar.button("Generate Proactive Query (Graph Memory)"): # New button
+    with st.spinner("Thinking of a proactive query from graph memory..."):
+        try:
+            # Call the new function, passing the mem0_client instance and user_id
+            proactive_query = generate_proactive_query_graph(mem0_client_instance=graph_mem0_client, user_id=st.session_state.mem0_session_id, llm=llm)
+            st.session_state.proactive_query_suggestion = proactive_query
+            st.sidebar.info(f"**Proactive Query (Graph Memory):** {proactive_query}")
+        except Exception as e:
+            st.sidebar.error(f"Error generating proactive query from graph memory: {e}")
             st.session_state.proactive_query_suggestion = None
 
-# Optionally display the proactive query suggestion if it's already in session state
+# Display the last proactive query suggestion
 if st.session_state.proactive_query_suggestion:
     st.sidebar.markdown(f"**Last Proactive Query:** {st.session_state.proactive_query_suggestion}")
+
 
 # --- Mood History Section ---
 st.sidebar.markdown("---")
@@ -235,11 +241,15 @@ st.sidebar.subheader("User Mood History")
 if st.sidebar.button("Show Mood History"):
     with st.spinner("Fetching and processing mood history..."):
         try:
-            all_mood_memories = mem0_client.search(
-                query="user's emotional state or mood changes",
-                user_id=st.session_state.mem0_session_id,
-                categories=["user_mood"],
-                limit=50,
+            all_mood_memories = mem0_client.get_all( # Changed from .search to .get_all for consistency with filters usage
+                version="v2", # Specify version for filters
+                filters={
+                    "AND": [
+                        {"user_id": st.session_state.mem0_session_id},
+                        {"categories": {"contains": "user_mood"}}
+                    ]
+                },
+                page_size=50,
             )
             
             mood_data_for_chart = []
@@ -262,7 +272,10 @@ if st.sidebar.button("Show Mood History"):
                             break
 
                 created_at_iso = memory.get('created_at')
-                timestamp = datetime.fromisoformat(created_at_iso.replace('Z', '+00:00')) if created_at_iso else datetime.now()
+                if created_at_iso:
+                    timestamp = datetime.fromisoformat(created_at_iso.split('.')[0]).replace(tzinfo=None)
+                else:
+                    timestamp = datetime.now()
                 
                 mood_data_for_chart.append({
                     "time": timestamp,
@@ -308,7 +321,6 @@ for message in st.session_state.messages:
 prompt = st.chat_input("Type your message here...")
 
 if prompt:
-    # 1. Controversial Topic Detection - FIRST STEP
     controversial_analysis_result = detect_controversial_topic(prompt)
     
     if controversial_analysis_result.get('is_controversial'):
@@ -324,25 +336,32 @@ if prompt:
         with st.chat_message("assistant"):
             st.markdown(refusal_message)
         
-        # Optionally add a memory about refusal to Mem0 for tracking
         try:
             mem0_client.add(messages=[{"role": "assistant", "content": f"Refused to discuss controversial topic: {category} for user message: '{prompt}'"}],
                             user_id=st.session_state.mem0_session_id,
                             categories=["chatbot_interactions"])
         except Exception as add_refusal_e:
-            st.warning(f"Could not add refusal memory to Mem0: {add_refusal_e}")
+            st.warning(f"Could not add refusal memory to Mem0 (Graph Memory): {add_refusal_e}")
         
-        st.stop() # Stop further processing for this prompt
+        st.stop()
 
-    # If not controversial, proceed with normal processing:
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
         st.markdown(prompt)
 
     try:
         mem0_client.add(messages=[{"role": "user", "content": prompt}], user_id=st.session_state.mem0_session_id)
+
     except Exception as e:
-        st.warning(f"Could not add user message to Mem0: {e}")
+        st.warning(f"Could not add user message to Mem0 (Cloud Vector Database): {e}")
+
+    try:
+        graph_mem0_client.add(prompt, user_id=st.session_state.mem0_session_id)
+        # graph_mem0_client.add("My best friend Sarah and I met in high school, and we've been inseparable since then.", user_id=st.session_state.mem0_session_id)
+    except Exception as e:
+        st.warning(f"Could not add user message to Mem0 (Graph Memory): {e}")
+
+
 
     relevant_memories_str = "No relevant memories found."
     try:
@@ -397,7 +416,7 @@ if prompt:
                                     user_id=st.session_state.mem0_session_id,
                                     categories=["user_mood"])
                 except Exception as add_mood_e:
-                    st.warning(f"Could not add detected mood to Mem0: {add_mood_e}")
+                    st.warning(f"Could not add detected mood to Mem0 (Graph Memory): {add_mood_e}")
 
             if current_intent_data:
                 user_intent_str = f"{current_intent_data.get('intent', 'unknown')}"

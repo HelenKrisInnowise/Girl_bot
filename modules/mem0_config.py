@@ -2,15 +2,21 @@
 import os
 from dotenv import load_dotenv
 from mem0 import MemoryClient
-
+from mem0 import Memory 
 load_dotenv() 
 
-# Set environment variables required by Mem0 for Azure OpenAI if not already set
-# Mem0's internal LLM will use these for its reasoning.
-os.environ["LLM_AZURE_OPENAI_API_KEY"] = os.getenv("OPENAI_API_KEY")
-os.environ["LLM_AZURE_DEPLOYMENT"] = os.getenv("OPENAI_MODEL_DEPLOYMENT_NAME")
-os.environ["LLM_AZURE_ENDPOINT"] = os.getenv("OPENAI_API_ENDPOINT")
-os.environ["LLM_AZURE_API_VERSION"] = os.getenv("OPENAI_API_VERSION")
+os.environ["OPENAI_API_KEY"] = os.getenv("OPENAI_API_KEY")
+
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+NEO4J_URI = os.getenv("NEO4J_URI")
+NEO4J_USERNAME = os.getenv("NEO4J_USERNAME")
+NEO4J_PASSWORD = os.getenv("NEO4J_PASSWORD")
+NEO4J_DATABASE = os.getenv("NEO4J_DATABASE")
+
+
+
+if not all([NEO4J_URI, NEO4J_USERNAME, NEO4J_PASSWORD]):
+    raise ValueError("Neo4j environment variables (NEO4J_URI, NEO4J_USER, NEO4J_PASSWORD) are not set. Graph Memory cannot be initialized.")
 
 # Define custom categories for Mem0
 MEM0_CUSTOM_CATEGORIES = [
@@ -32,7 +38,8 @@ MEM0_CUSTOM_CATEGORIES = [
     {"pet_peeves": "Things that consistently annoy or bother the user."},
     {"bucket_list": "Things the user wants to experience or achieve in their lifetime."},
     {"health": "User's physical and mental health information, excluding sexual health."},
-    {"sexual_health": "User's sexual wellbeing, preferences, and related health matters (if explicitly mentioned)."}
+    {"sexual_health": "User's sexual wellbeing, preferences, and related health matters (if explicitly mentioned)."},
+    {"chatbot_interactions": "Memories related to how the user interacts with the chatbot itself or its functionalities."},
 ]
 
 MEM0_CUSTOM_INSTRUCTIONS = """
@@ -76,6 +83,9 @@ Emotional Domain:
 - **user_mood**: Current emotional state with context and intensity.
 - **milestones**: Emotional significant events and their impact.
 
+Chatbot_interactions
+**chatbot_interactions**: Note down feedback or observations about the chatbot's behavior or functionality.
+
 Special Handling Rules:
 1. Context Sensitivity: Relationship status goes to:
    - 'relationships' if mentioned casually ("my friend X")
@@ -90,25 +100,70 @@ Additional General Rules:
 4. Contradiction Resolution: For sensitive data, keep historical versions longer.
 
 """
-# 6. Overwrite previous memories if new information contradicts old, for the same type of detail (e.g., if user changes their favorite color).
+
+GRAPH_CUSTOM_PROMPT = """
+Extract and connect relationship-focused entities with these rules:
+1. PEOPLE: Extract names with properties: 
+   - relation_type (family/friend/partner/colleague) 
+   - frequency_mentioned (integer)
+   - last_mentioned (timestamp)
+   
+2. EVENTS: Create nodes for relationship milestones with:
+   - type (wedding/argument/vacation/etc.)
+   - date (when known)
+   - significance (high/medium/low)
+   
+3. EMOTIONS: Extract with properties:
+   - type (happy/sad/angry/etc.)
+   - intensity (1-10)
+   - trigger_person (when applicable)
+   - duration (brief/prolonged)
+   
+4. BELIEFS: Extract core values with:
+   - category (relationships/work/life)
+   - strength (strong/moderate)
+   
+Always create relationships between:
+- (User)-[HAS_RELATIONSHIP_WITH]->(Person)
+- (User)-[EXPERIENCED]->(Event)
+- (Event)-[INVOLVES]->(Person)
+- (User)-[FELT]->(Emotion)-[ABOUT]->(Person/Event)
+- (User)-[HOLDS_BELIEF]->(Belief)
+"""
+
+mem0_full_config = {
+        "graph_store": {
+            "provider": "neo4j",
+            "config": {
+                "url": "neo4j://localhost:7687",
+                "username": "neo4j",
+                "password": "Girls_bot",
+                "database": "neo4j",
+            }
+        },
+        "embedding": {
+            "model": "text-embedding-3-small"
+        },
+        "version": "v1.1"
+    }
+
+# Initialize Mem0 with the full configuration
+try:
+    graph_mem0_client = Memory.from_config(config_dict=mem0_full_config)
+except Exception as e:
+    raise RuntimeError(f"Failed to initialize Mem0 (Graph Memory) client: {e}. Check MEM0_API_KEY, Neo4j, and OpenAI LLM configs.")
+
 
 
 # Configuration for Mem0's internal LLM to use Azure OpenAI
 mem0_config = {
     "llm": {
-        "provider": "azure_openai",
+        "provider": "openai",
         "config": {
-            "model": os.getenv("OPENAI_MODEL_DEPLOYMENT_NAME"), # Use deployment name here
-            "temperature": 0.1, # Lower temperature for more consistent memory operations
-            "max_tokens": 2000,
-            "azure_kwargs": {
-                "azure_deployment": os.getenv("OPENAI_MODEL_DEPLOYMENT_NAME"),
-                "api_version": os.getenv("OPENAI_API_VERSION"),
-                "azure_endpoint": os.getenv("OPENAI_API_ENDPOINT"),
-                "api_key": os.getenv("OPENAI_API_KEY"),
-            }
+            "api_key": OPENAI_API_KEY,
+            "model": "gpt-4"
         }
-    }
+    },
 }
 
 # Initialize Mem0 client (without custom categories/instructions in constructor)
@@ -126,12 +181,8 @@ try:
         # Catch errors during update_project, but allow client init to succeed if possible
         print(f"Warning: Could not update Mem0 project settings: {update_e}")
         print("Ensure your API key has project write permissions.")
-        # Re-raise only if client itself failed to init, not just the update
         pass # Do not re-raise, allow the app to continue without custom settings if update fails
 
 
 except Exception as e:
     raise RuntimeError(f"Failed to initialize Mem0 client: {e}. Check MEM0_API_KEY and Azure OpenAI LLM configs.")
-
-
-

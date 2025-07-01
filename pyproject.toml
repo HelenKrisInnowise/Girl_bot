@@ -6,6 +6,7 @@ readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
     "mem0ai",
+    "mem0ai[graph]",
     "langchain",
     "langchain_openai",
     "langchain-community",

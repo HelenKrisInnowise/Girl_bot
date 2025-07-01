@@ -450,6 +450,15 @@ wheels = [
 ]
 
 [[package]]
+name = "fsspec"
+version = "2024.12.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/ee/11/de70dee31455c546fbc88301971ec03c328f3d1138cfba14263f651e9551/fsspec-2024.12.0.tar.gz", hash = "sha256:670700c977ed2fb51e0d9f9253177ed20cbde4a3e5c0283cc5385b5870c8533f", size = 291600, upload-time = "2024-12-19T19:57:30.333Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/de/86/5486b0188d08aa643e127774a99bac51ffa6cf343e3deb0583956dca5b22/fsspec-2024.12.0-py3-none-any.whl", hash = "sha256:b520aed47ad9804237ff878b504267a3b0b441e97508bd6d2d8774e3db85cee2", size = 183862, upload-time = "2024-12-19T19:57:28.258Z" },
+]
+
+[[package]]
 name = "girl-bot"
 version = "0.1.0"
 source = { virtual = "." }
@@ -457,7 +466,7 @@ dependencies = [
     { name = "langchain" },
     { name = "langchain-community" },
     { name = "langchain-openai" },
-    { name = "mem0ai" },
+    { name = "mem0ai", extra = ["graph"] },
     { name = "pydantic" },
     { name = "python-dotenv" },
     { name = "streamlit" },
@@ -477,6 +486,7 @@ requires-dist = [
     { name = "langchain-community" },
     { name = "langchain-openai" },
     { name = "mem0ai" },
+    { name = "mem0ai", extras = ["graph"] },
     { name = "pydantic" },
     { name = "python-dotenv" },
     { name = "streamlit" },
@@ -822,6 +832,15 @@ wheels = [
 ]
 
 [[package]]
+name = "json-repair"
+version = "0.39.1"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/95/60/6d1599bc01070d9fe3840d245ae80fd24b981c732d962842825ce7a9fde6/json_repair-0.39.1.tar.gz", hash = "sha256:e90a489f247e1a8fc86612a5c719872a3dbf9cbaffd6d55f238ec571a77740fa", size = 30040, upload-time = "2025-02-23T11:26:13.834Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/ff/b9/2e445481555422b907dab468b53574bc1e995099ca1a1201d0d876ca05e9/json_repair-0.39.1-py3-none-any.whl", hash = "sha256:3001409a2f319249f13e13d6c622117a5b70ea7e0c6f43864a0233cdffc3a599", size = 20686, upload-time = "2025-02-23T11:26:12.582Z" },
+]
+
+[[package]]
 name = "jsonpatch"
 version = "1.33"
 source = { registry = "https://pypi.org/simple" }
@@ -926,6 +945,21 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/f0/63/470aa84393bad5d51749417af58522a691174f8b2d05843f5633d473faa0/langchain_core-0.3.66.tar.gz", hash = "sha256:350c92e792ec1401f4b740d759b95f297710a50de29e1be9fbfff8676ef62117", size = 560102, upload-time = "2025-06-20T22:08:19.532Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/c0/c3/8080431fd7567a340d3a42e36c0bb3970a8d00d5e27bf3ca2103b3b55996/langchain_core-0.3.66-py3-none-any.whl", hash = "sha256:65cd6c3659afa4f91de7aa681397a0c53ff9282425c281e53646dd7faf16099e", size = 438874, upload-time = "2025-06-20T22:08:17.52Z" },
+]
+
+[[package]]
+name = "langchain-neo4j"
+version = "0.4.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "langchain" },
+    { name = "langchain-core" },
+    { name = "neo4j" },
+    { name = "neo4j-graphrag" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/f9/29/b1c485eaf5adffc59d97d2a47e9b5f3fcfc58becb0e92ded197b98c03138/langchain_neo4j-0.4.0.tar.gz", hash = "sha256:3f059a66411cec1062a2b8c44953a70d0fff9e123e9fb1d6b3f17a0bef6d6114", size = 27061, upload-time = "2025-03-03T19:05:44.163Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/70/7e/d782a77ed3f561a466410aa384f93f59e33930e3d64686d0e1dac4d598c5/langchain_neo4j-0.4.0-py3-none-any.whl", hash = "sha256:2760b5757e7a402884cf3419830217651df97fe4f44b3fec6c96b14b6d7fd18e", size = 31349, upload-time = "2025-03-03T19:05:43.219Z" },
 ]
 
 [[package]]
@@ -1061,6 +1095,13 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/8a/d6/3d67909445682f5e73e910b187fc64ff84643709ac1956240d8a3834b1bd/mem0ai-0.1.110-py3-none-any.whl", hash = "sha256:4f69df6e633200b9d1b0177f82eaa96bf70a446aee8f40e56eedb67403f14395", size = 166820, upload-time = "2025-06-20T15:01:54.864Z" },
 ]
 
+[package.optional-dependencies]
+graph = [
+    { name = "langchain-neo4j" },
+    { name = "neo4j" },
+    { name = "rank-bm25" },
+]
+
 [[package]]
 name = "multidict"
 version = "6.5.0"
@@ -1158,6 +1199,36 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/56/e5/0b875d29e2a4d112c58fef6aac2ed3a73bbdd4d8d0dce722fd154357248a/narwhals-1.44.0.tar.gz", hash = "sha256:8cf0616d4f6f21225b3b56fcde96ccab6d05023561a0f162402aa9b8c33ad31d", size = 499250, upload-time = "2025-06-23T08:28:08.653Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/ff/fb/12f4a971467aac3cb7cbccbbfca5d0f05e23722068112c1ac4a393613ebe/narwhals-1.44.0-py3-none-any.whl", hash = "sha256:a170ea0bab4cf1f323d9f8bf17f2d7042c3d73802bea321996b39bf075d57de5", size = 365240, upload-time = "2025-06-23T08:28:06.314Z" },
+]
+
+[[package]]
+name = "neo4j"
+version = "5.28.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "pytz" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/4b/20/733dac16f7cedc80b23093415822c9763302519cba0e7c8bcdb5c01fc512/neo4j-5.28.1.tar.gz", hash = "sha256:ae8e37a1d895099062c75bc359b2cce62099baac7be768d0eba7180c1298e214", size = 231094, upload-time = "2025-02-10T08:36:22.566Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/6a/57/94225fe5e9dabdc0ff60c88cbfcedf11277f4b34e7ab1373d3e62dbdd207/neo4j-5.28.1-py3-none-any.whl", hash = "sha256:6755ef9e5f4e14b403aef1138fb6315b120631a0075c138b5ddb2a06b87b09fd", size = 312258, upload-time = "2025-02-10T08:36:16.209Z" },
+]
+
+[[package]]
+name = "neo4j-graphrag"
+version = "1.7.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "fsspec" },
+    { name = "json-repair" },
+    { name = "neo4j" },
+    { name = "pydantic" },
+    { name = "pypdf" },
+    { name = "pyyaml" },
+    { name = "types-pyyaml" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/7c/5a/b9309d488b7cfe63326b6502b12dfae16558d64ead4d007b5e6392dd36ac/neo4j_graphrag-1.7.0.tar.gz", hash = "sha256:c6c1f730e680d8af3ff3e1ee6086c465c15dd3245157e6c40606ac3ddae7d4f0", size = 104306, upload-time = "2025-04-28T12:15:23.059Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/98/2a/b9e29d7a1068302f94dc05d682f1068795947f6c0a99d8274e7f1ca29d23/neo4j_graphrag-1.7.0-py3-none-any.whl", hash = "sha256:29a854f2f1e268f043446cdd387c72ee954b87726329ef6479c59ed7b9cf0751", size = 180365, upload-time = "2025-04-28T12:15:20.916Z" },
 ]
 
 [[package]]
@@ -1762,6 +1833,15 @@ wheels = [
 ]
 
 [[package]]
+name = "pypdf"
+version = "5.7.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/7b/42/fbc37af367b20fa6c53da81b1780025f6046a0fac8cbf0663a17e743b033/pypdf-5.7.0.tar.gz", hash = "sha256:68c92f2e1aae878bab1150e74447f31ab3848b1c0a6f8becae9f0b1904460b6f", size = 5026120, upload-time = "2025-06-29T08:49:48.305Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/73/9f/78d096ef795a813fa0e1cb9b33fa574b205f2b563d9c1e9366c854cf0364/pypdf-5.7.0-py3-none-any.whl", hash = "sha256:203379453439f5b68b7a1cd43cdf4c5f7a02b84810cefa7f93a47b350aaaba48", size = 305524, upload-time = "2025-06-29T08:49:46.16Z" },
+]
+
+[[package]]
 name = "pytest"
 version = "8.4.1"
 source = { registry = "https://pypi.org/simple" }
@@ -1874,6 +1954,18 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/1d/56/3f355f931c239c260b4fe3bd6433ec6c9e6185cd5ae0970fe89d0ca6daee/qdrant_client-1.14.3.tar.gz", hash = "sha256:bb899e3e065b79c04f5e47053d59176150c0a5dabc09d7f476c8ce8e52f4d281", size = 286766, upload-time = "2025-06-16T11:13:47.838Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/35/5e/8174c845707e60b60b65c58f01e40bbc1d8181b5ff6463f25df470509917/qdrant_client-1.14.3-py3-none-any.whl", hash = "sha256:66faaeae00f9b5326946851fe4ca4ddb1ad226490712e2f05142266f68dfc04d", size = 328969, upload-time = "2025-06-16T11:13:46.636Z" },
+]
+
+[[package]]
+name = "rank-bm25"
+version = "0.2.2"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "numpy" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/fc/0a/f9579384aa017d8b4c15613f86954b92a95a93d641cc849182467cf0bb3b/rank_bm25-0.2.2.tar.gz", hash = "sha256:096ccef76f8188563419aaf384a02f0ea459503fdf77901378d4fd9d87e5e51d", size = 8347, upload-time = "2022-02-16T12:10:52.196Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/2a/21/f691fb2613100a62b3fa91e9988c991e9ca5b89ea31c0d3152a3210344f9/rank_bm25-0.2.2-py3-none-any.whl", hash = "sha256:7bd4a95571adadfc271746fa146a4bcfd89c0cf731e49c3d1ad863290adbe8ae", size = 8584, upload-time = "2022-02-16T12:10:50.626Z" },
 ]
 
 [[package]]
@@ -2237,6 +2329,15 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/eb/79/72064e6a701c2183016abbbfedaba506d81e30e232a68c9f0d6f6fcd1574/traitlets-5.14.3.tar.gz", hash = "sha256:9ed0579d3502c94b4b3732ac120375cda96f923114522847de4b3bb98b96b6b7", size = 161621, upload-time = "2024-04-19T11:11:49.746Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/00/c0/8f5d070730d7836adc9c9b6408dec68c6ced86b304a9b26a14df072a6e8c/traitlets-5.14.3-py3-none-any.whl", hash = "sha256:b74e89e397b1ed28cc831db7aea759ba6640cb3de13090ca145426688ff1ac4f", size = 85359, upload-time = "2024-04-19T11:11:46.763Z" },
+]
+
+[[package]]
+name = "types-pyyaml"
+version = "6.0.12.20250516"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/4e/22/59e2aeb48ceeee1f7cd4537db9568df80d62bdb44a7f9e743502ea8aab9c/types_pyyaml-6.0.12.20250516.tar.gz", hash = "sha256:9f21a70216fc0fa1b216a8176db5f9e0af6eb35d2f2932acb87689d03a5bf6ba", size = 17378, upload-time = "2025-05-16T03:08:04.897Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/99/5f/e0af6f7f6a260d9af67e1db4f54d732abad514252a7a378a6c4d17dd1036/types_pyyaml-6.0.12.20250516-py3-none-any.whl", hash = "sha256:8478208feaeb53a34cb5d970c56a7cd76b72659442e733e268a94dc72b2d0530", size = 20312, upload-time = "2025-05-16T03:08:04.019Z" },
 ]
 
 [[package]]
