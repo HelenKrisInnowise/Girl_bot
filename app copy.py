@@ -9,7 +9,8 @@ from datetime import datetime, timedelta
 # Import components from submodules
 from modules.mem0_config import mem0_client, graph_mem0_client 
 from modules.profiles import MAIN_CHARACTER_TRAITS, FORMALITY_LEVELS, COMMUNICATION_STYLES
-from modules.llm_setup import generate_proactive_query, llm, mood_llm, get_system_prompt_template, generate_dynamic_profile, get_user_personal_profile, get_user_personal_profile_graph, generate_proactive_query_graph, detect_controversial_topic
+from modules.pydantic_models import MoodAttributes, IntentAttributes, UserProfile, ControversialTopicAttributes
+from modules.llm_setup import generate_proactive_query, llm, mood_llm, intent_llm, get_system_prompt_template, generate_dynamic_profile, DynamicProfileOutput, get_user_personal_profile, generate_proactive_query_graph, detect_controversial_topic
 from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
 from pydantic import BaseModel
 
@@ -72,7 +73,6 @@ if "mem0_session_id" not in st.session_state:
     st.session_state.current_mood = None
     st.session_state.current_intent = None
     st.session_state.user_profile_summary = None
-    st.session_state.user_profile_summary_graph = None
     st.session_state.mood_history_data = None
     st.session_state.proactive_query_suggestion = None
     st.session_state.suggested_topic_query = None # New state for suggested topic
@@ -123,7 +123,6 @@ if st.sidebar.button("Generate Persona"):
             st.session_state.messages = []
             st.session_state.mem0_session_id = str(uuid.uuid4())
             st.session_state.user_profile_summary = None
-            st.session_state.user_profile_summary_graph = None
             st.session_state.mood_history_data = None
             st.session_state.proactive_query_suggestion = None
             st.session_state.proactive_query_suggestion_vector = None
@@ -149,7 +148,7 @@ st.sidebar.markdown(f"**Style:** {st.session_state.selected_style}")
 st.sidebar.markdown("---")
 st.sidebar.subheader("User Personal Profile Vector")
 
-if st.sidebar.button("Show/Update My Vector Profile"):
+if st.sidebar.button("Show/Update My Profile"):
     with st.spinner("Fetching and summarizing your profile from memory..."):
         try:
             profile_filters = {
@@ -175,6 +174,8 @@ if st.sidebar.button("Show/Update My Vector Profile"):
 if st.session_state.user_profile_summary:
     profile = st.session_state.user_profile_summary
     st.sidebar.markdown(f"**Name:** {profile['name'] if profile['name'] else 'Not found'}")
+    # st.sidebar.markdown(f"**Interests:** {', '.join(profile['interests']) if profile['interests'] else 'None'}")
+    # st.sidebar.markdown(f"**Preferences:** {', '.join(profile['preferences']) if profile['preferences'] else 'None'}")
     st.sidebar.markdown(f"**Summary:** {profile['summary']}")
 else:
     st.sidebar.info("Click 'Show/Update My Profile' to generate your personal profile based on past conversations.")
@@ -184,8 +185,41 @@ else:
 st.sidebar.markdown("---")
 st.sidebar.subheader("User Personal Profile Graph")
 
-if st.sidebar.button("Show/Update My Graph Profile"):
+if st.sidebar.button("Show/Update My Profile"):
     with st.spinner("Fetching and summarizing your profile from graph..."):
+        try:
+            profile_filters = {
+                "AND": [
+                    {"user_id": st.session_state.mem0_session_id},
+                    {"OR": [
+                        {"categories": {"contains": "personal_details"}},
+                        {"categories": {"contains": "user_interests"}},
+                        {"categories": {"contains": "user_preferences"}},
+                        {"categories": {"contains": "relationships"}},
+                        {"categories": {"contains": "opinions"}}
+                    ]}
+                ]
+            }
+            personal_memories = mem0_client.get_all(version="v2", filters=profile_filters, page_size=30)
+            
+            st.session_state.user_profile_summary = get_user_personal_profile(personal_memories)
+            st.sidebar.success("User profile updated!")
+        except Exception as e:
+            st.sidebar.error(f"Error fetching/summarizing profile: {e}")
+            st.session_state.user_profile_summary = None
+
+if st.session_state.user_profile_summary:
+    profile = st.session_state.user_profile_summary
+    st.sidebar.markdown(f"**Name:** {profile['name'] if profile['name'] else 'Not found'}")
+    # st.sidebar.markdown(f"**Interests:** {', '.join(profile['interests']) if profile['interests'] else 'None'}")
+    # st.sidebar.markdown(f"**Preferences:** {', '.join(profile['preferences']) if profile['preferences'] else 'None'}")
+    st.sidebar.markdown(f"**Summary:** {profile['summary']}")
+else:
+    st.sidebar.info("Click 'Show/Update My Profile' to generate your personal profile based on past conversations.")
+
+
+if st.sidebar.button("Generate Proactive Query Graph"): # Renamed button
+    with st.spinner("Thinking of a way to re-engage..."):
         try:
             # Calculate date some days ago for filtering
             # days_ago = datetime.now() - timedelta(days=50)
@@ -197,49 +231,17 @@ if st.sidebar.button("Show/Update My Graph Profile"):
             #     ]
             # }
             graph_data = graph_mem0_client.get_all(user_id = st.session_state.mem0_session_id)
-            st.session_state.user_profile_summary_graph = get_user_personal_profile_graph(graph_data)
-            st.sidebar.success("User graph profile updated!")
-        except Exception as e:
-            st.sidebar.error(f"Error fetching/summarizing profile: {e}")
-            st.session_state.user_profile_summary_graph = None
-
-if st.session_state.user_profile_summary_graph:
-    profile = st.session_state.user_profile_summary_graph
-    st.sidebar.markdown(f"**Name:** {profile['name'] if profile['name'] else 'Not found'}")
-    st.sidebar.markdown(f"**Summary:** {profile['summary']}")
-else:
-    st.sidebar.info("Click 'Show/Update My Profile' to generate your personal profile based on user's MemoryGraph.")
-    
-    
-# --- Conversation Tools Section ---
-st.sidebar.markdown("---")
-st.sidebar.subheader("Conversation Tools")
-
-if st.sidebar.button("Generate Proactive Query Vector"): # Renamed button
-    with st.spinner("Thinking of a way to re-engage..."):
-        try:
-            # Calculate date 10 days ago for filtering
-            ten_days_ago = datetime.now() - timedelta(days=10)
-
-            ten_days_ago_iso = ten_days_ago.isoformat(timespec='seconds') + 'Z' 
-            filters = {
-                "AND": [
-                    {"user_id": st.session_state.mem0_session_id},
-                    {"created_at": {"gte": ten_days_ago_iso}},
-                    {"OR": [
-                        {"categories": {"contains": "life_events"}},
-                        {"categories": {"contains": "daily_routine"}}
-                    ]}
-                ]
-            }
-
-            recent_relevant_memories = mem0_client.get_all(version="v2", filters=filters, page_size=15) # limit to 10 for prompt context
-            proactive_query_vector = generate_proactive_query(recent_relevant_memories) # Call the renamed function
-            st.session_state.proactive_query_suggestion_vector = proactive_query_vector # Store in session state
-            st.sidebar.info(f"**Proactive Query Suggestion:** {proactive_query_vector}") # Display the suggestion
+            print(graph_data)
+            st.session_state.user_profile_summary_graph = get_user_personal_profile(personal_memories)
+            st.session_state.proactive_query_suggestion_vector = proactive_query # Store in session state
+            st.sidebar.info(f"**Proactive Query Suggestion:** {proactive_query}") # Display the suggestion
         except Exception as e:
             st.sidebar.error(f"Error generating proactive query: {e}")
             st.session_state.proactive_query_suggestion_vector = None
+
+# --- Conversation Tools Section ---
+st.sidebar.markdown("---")
+st.sidebar.subheader("Conversation Tools")
 
 # Display the last proactive query suggestion
 if st.session_state.proactive_query_suggestion:
@@ -250,9 +252,7 @@ if st.sidebar.button("Generate Proactive Query (Graph Memory)"): # New button
     with st.spinner("Thinking of a proactive query from graph memory..."):
         try:
             # Call the new function, passing the mem0_client instance and user_id
-            graph_data = graph_mem0_client.get_all(user_id = st.session_state.mem0_session_id)
-            # st.session_state.user_profile_summary_graph = get_user_personal_profile_graph(graph_data)
-            proactive_query = generate_proactive_query_graph(graph_data)
+            proactive_query = generate_proactive_query_graph(mem0_client_instance=graph_mem0_client, user_id=st.session_state.mem0_session_id, llm=llm)
             st.session_state.proactive_query_suggestion = proactive_query
             st.sidebar.info(f"**Proactive Query (Graph Memory):** {proactive_query}")
         except Exception as e:
@@ -280,7 +280,16 @@ if st.sidebar.button("Show Mood History"):
                     {"categories": {"contains": "user_mood"}}
                 ]
             }
-
+            # all_mood_memories = mem0_client.get_all(
+            #     version="v2",
+            #     filters={
+            #         "AND": [
+            #             {"user_id": st.session_state.mem0_session_id},
+            #             {"categories": {"contains": "user_mood"}}
+            #         ]
+            #     },
+            #     page_size=50,
+            # )
             all_mood_memories = mem0_client.get_all(version="v2", filters=filters, page_size=50)
             # --- NEW: Use mood_llm to parse the mood from memory text ---
             mood_data_for_chart = []
@@ -396,6 +405,7 @@ if prompt:
     try:
         # formatted_message = f"As user {st.session_state.mem0_session_id}, I share: {prompt}"
         graph_mem0_client.add(prompt, user_id=st.session_state.mem0_session_id)
+        # graph_mem0_client.add("My best friend Sarah and I met in high school, and we've been inseparable since then.", user_id=st.session_state.mem0_session_id)
     except Exception as e:
         st.warning(f"Could not add user message to Mem0 (Graph Memory): {e}")
 
@@ -415,6 +425,61 @@ if prompt:
     except Exception as e:
         st.warning(f"Could not perform Mem0 search: {e}. Proceeding without additional memories.")
 
+    # user_mood_str = "Not detected."
+    # user_intent_str = "Not detected."
+    # try:
+    #     with st.spinner("Analyzing your mood and intent..."):
+    #         mood_analysis_raw = mood_llm.invoke(prompt)
+    #         intent_analysis_raw = intent_llm.invoke(prompt)
+
+    #         current_mood_data = {}
+    #         current_intent_data = {}
+
+    #         if isinstance(mood_analysis_raw, dict) and 'parsed' in mood_analysis_raw and isinstance(mood_analysis_raw['parsed'], BaseModel):
+    #             current_mood_data = mood_analysis_raw['parsed'].model_dump()
+    #         elif isinstance(mood_analysis_raw, BaseModel):
+    #             current_mood_data = mood_analysis_raw.model_dump()
+    #         else:
+    #             st.warning(f"Mood analysis result not a recognizable Pydantic model or dict with 'parsed'. Type: {type(mood_analysis_raw)}")
+
+    #         if isinstance(intent_analysis_raw, dict) and 'parsed' in intent_analysis_raw and isinstance(intent_analysis_raw['parsed'], BaseModel):
+    #             current_intent_data = intent_analysis_raw['parsed'].model_dump()
+    #         elif isinstance(intent_analysis_raw, BaseModel):
+    #             current_intent_data = intent_analysis_raw.model_dump()
+    #         else:
+    #             st.warning(f"Intent analysis result not a recognizable Pydantic model or dict with 'parsed'. Type: {type(intent_analysis_raw)}")
+
+
+    #         st.session_state.current_mood = current_mood_data
+    #         st.session_state.current_intent = current_intent_data
+
+    #         if current_mood_data:
+    #             user_mood_str = f"Mood: {current_mood_data.get('mood', 'unknown')}, Intensity: {current_mood_data.get('intensity', 'unknown')}"
+    #             if current_mood_data.get('reason'):
+    #                 user_mood_str += f", Reason: {current_mood_data['reason']}"
+            
+    #         if user_mood_str != "Not detected.":
+    #             try:
+    #                 mem0_client.add(messages=[{"role": "user", "content": f"User's mood detected: {user_mood_str}"}],
+    #                                 user_id=st.session_state.mem0_session_id,
+    #                                 categories=["user_mood"])
+    #             except Exception as add_mood_e:
+    #                 st.warning(f"Could not add detected mood to Mem0 (Graph Memory): {add_mood_e}")
+
+    #         if current_intent_data:
+    #             user_intent_str = f"{current_intent_data.get('intent', 'unknown')}"
+    #             if current_intent_data.get('target'):
+    #                 user_intent_str += f" - target: {current_intent_data['target']}"
+    #             if current_intent_data.get('details'):
+    #                 user_intent_str += f" - details: {current_intent_data['details']}"
+
+    #         st.sidebar.subheader("User Analysis:")
+    #         st.sidebar.markdown(f"**Mood:** {user_mood_str}")
+    #         st.sidebar.markdown(f"**Intent:** {user_intent_str}")
+
+    # except Exception as e:
+    #     st.warning(f"Could not analyze mood/intent: {e}. Proceeding without it.")
+
 
     with st.chat_message("assistant"):
         with st.spinner(f"Thinking as a dynamically generated persona..."):
@@ -428,6 +493,8 @@ if prompt:
                 profile_description=profile_desc,
                 profile_behavioral_traits=profile_traits,
                 relevant_memories=relevant_memories_str,
+                # user_mood=user_mood_str,
+                # user_intent=user_intent_str
             )
 
             messages = [

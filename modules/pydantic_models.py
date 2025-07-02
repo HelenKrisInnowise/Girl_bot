@@ -15,9 +15,9 @@ class IntentAttributes(BaseModel):
 
 class UserProfile(BaseModel):
     name: Optional[str] = Field(None, description="The user's name.")
-    interests: List[str] = Field(default_factory=list, description="A list of the user's stated interests or hobbies.")
-    preferences: List[str] = Field(default_factory=list, description="A list of other personal preferences of the user.")
-    summary: Optional[str] = Field(None, description="A brief summary of the user's overall personal profile.")
+    # interests: List[str] = Field(default_factory=list, description="A list of the user's stated interests or hobbies.")
+    # preferences: List[str] = Field(default_factory=list, description="A list of other personal preferences of the user.")
+    summary: Optional[str] = Field(None, description="A brief summary of the user's overall personal profile and psychological portrait.")
 
 # New Pydantic model for controversial topic detection
 class ControversialTopicAttributes(BaseModel):

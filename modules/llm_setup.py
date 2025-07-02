@@ -1,11 +1,9 @@
 
 import os
 from dotenv import load_dotenv
-from langchain_openai import AzureChatOpenAI
 from langchain_openai import ChatOpenAI
 from modules.pydantic_models import MoodAttributes, IntentAttributes, UserProfile, ControversialTopicAttributes 
 from pydantic import BaseModel, Field 
-from langchain.output_parsers.openai_tools import PydanticToolsParser
 from typing import List
 from typing import Dict, List
 import warnings
@@ -96,223 +94,56 @@ def get_user_personal_profile(user_memories: List[dict]) -> dict:
         print(f"Error generating user personal profile: {e}")
         return {"name": None, "interests": [], "preferences": [], "summary": f"Could not generate profile: {e}"}
 
-def generate_proactive_query_graph2(mem0_client_instance, user_id: str, llm = llm) -> str:
+def get_user_personal_profile_graph(user_memories: List[dict]) -> str:
     """
-    Generates a personalized question based on the user's graph data analysis.
-
-    Args:
-        mem0_client_instance: Mem0 client instance
-        user_id: User identifier
-        llm: Initialized OpenAI client
-
-    Returns:
-        A string containing the personalized question
+    Generates a summarized user personal profile
+    based on the hole Graph stored in Mem0.
     """
-    def analyze_graph_data(graph_data: Dict) -> Dict[str, List[str]]:
-      
-        user_prefix = f"user_id:_{user_id}"
-        analysis = {
-            'people': set(),       
-            'activities': set(),    
-            'relationships': [],     
-            'timed_patterns': [],   
-            'emotional_connections': []  
-        }
+    if not user_memories:
+        return {"No personal information found in graph."}
+    prompt = f"""
+    Analyze this graph, built from messages from the user to the bot and tell about the user everything you can understand from this graph.
+    Create a psychological portrait of the user.
 
-        for rel in graph_data.get('relations', []):
-            source = rel['source'].replace(user_prefix, 'You') if user_prefix in rel['source'] else rel['source']
-            target = rel['target']
-            rel_type = rel['relationship'].lower()
+    User Graph:
+    {user_memories}
 
-            if any(kwd in rel_type for kwd in ['of', 'with', 'has', 'is', 'knows', 'friend', 'mother', 'father']):
-                for entity in [source, target]:
-                    if entity.lower() not in ['week', 'month', 'day']:
-                        analysis['people'].add(entity)
-
-
-            if any(kwd in rel_type for kwd in ['spends', 'does', 'at', 'on', 'engaged', 'activity']):
-                if target.lower() not in ['week', 'month', 'day']:
-                    analysis['activities'].add(target)
-
-            
-            if source == 'You':
-                analysis['relationships'].append({
-                    'type': rel['relationship'],
-                    'with': target,
-                    'full': f"You {rel['relationship']} {target}"
-                })
-
-            
-            if any(emo_word in rel_type for emo_word in ['love', 'like', 'hate', 'feel']):
-                analysis['emotional_connections'].append(f"{source} {rel['relationship']} {target}")
-
-            
-            if any(time_word in target.lower() for time_word in ['week', 'month', 'day', 'year']):
-                analysis['timed_patterns'].append(f"{source} {rel['relationship']} {target}")
-
-        
-        return {
-            'people': list(analysis['people']),
-            'activities': list(analysis['activities']),
-            'relationships': analysis['relationships'],
-            'emotional_connections': analysis['emotional_connections'],
-            'timed_patterns': analysis['timed_patterns']
-        }
-
+    Output should strictly adhere to the UserProfile Pydantic model.
+    """
     try:
-        
-        graph_data = mem0_client_instance.get_all(user_id=user_id)
-        if not graph_data.get('results') and not graph_data.get('relations'):
-            return "It's been a while! How have you been?"
-
-        
-        analysis = analyze_graph_data(graph_data)
-        
-        context_parts = []
-        
-        if analysis['people']:
-            context_parts.append(f"Close contacts: {', '.join(analysis['people'])[:150]}")
-        
-        if analysis['relationships']:
-            rels = [r['full'] for r in analysis['relationships'][-3:]]  # Последние 3 отношения
-            context_parts.append(f"Your relationships: {'; '.join(rels)}")
-        
-        if analysis['emotional_connections']:
-            context_parts.append(f"Emotional notes: {analysis['emotional_connections'][-1]}")
-        
-        if analysis['timed_patterns']:
-            context_parts.append(f"Recurring: {analysis['timed_patterns'][-1]}")
-
-        context = "\n".join(context_parts) if context_parts else "No recent updates"
-
-        prompt = f"""Generate exactly ONE follow-up question based on:
-        
-        {context}
-        
-        Rules:
-        1. Sound genuinely interested
-        2. Reference specific relationships/activities
-        3. Use 15-20 words max
-        4. Focus on recent or emotional connections
-        
-        Good Examples:
-        "How's your relationship with {analysis['people'][0]} been lately?"
-        "Still doing {analysis['activities'][0]} regularly?"
-        "How do you feel about {analysis['emotional_connections'][0].split()[-1]} now?"
-        """
-        
-        response = llm.invoke(prompt)
-        question = response.content.strip()
-        
-        # Проверка качества вопроса
-        if not question or len(question.split()) > 25:
-            return "How have you been lately? Anything new?"
-        
-        return question
-
+        profile_summary = user_profile_llm.invoke(prompt)
+        return profile_summary.model_dump()
     except Exception as e:
-        print(f"[ERROR] Generation failed: {str(e)}")
-        return "Long time no see! How are things going?"
+        print(f"Error generating user personal profile: {e}")
+        return {"name": None, "interests": [], "preferences": [], "summary": f"Could not generate profile: {e}"}
+    
+def generate_proactive_query_graph(user_memories: List[dict]) -> str:
+    if not user_memories:
+        return "It's been a while! How are you doing today? Anything new or interesting happening?"
 
-def generate_proactive_query_graph(mem0_client_instance, user_id: str, llm = llm) -> str:
+    prompt = f"""
+    Analyze this graph, built from messages from the user to the bot and based on this graph
+    formulate a message with a question or a phrase implying a response.
+    The goal is to proactively and empathetically re-engage the user, as if you haven't chatted for a while.
+    Make the message sound natural, friendly, and caring.
+
+    User's memory graph:
+    {user_memories}
+
+    Example of desired output:
+    "Hi! Was thinking about your trip plans—did you end up booking that getaway you were dreaming about?"
+    "Hey you! How's your week been? Did you ever get around to reorganizing your workspace like you planned?"
+    "Hi! Just checking in—how's everything going with your new team? Settling in okay?"
+    "Hey there! How's the painting project coming along? Still finding time for it?"
     """
-    Generates a personalized question based on the user's graph data analysis.
-
-    Args:
-        mem0_client_instance: Mem0 client instance
-        user_id: User identifier
-        llm: Initialized DeepAI client
-
-    Returns:
-        A string containing the personalized question
-    """
-    def analyze_graph_data(graph_data: Dict) -> Dict[str, List[str]]:
-        """Анализирует графовые данные и возвращает структурированную информацию"""
-        user_prefix = f"user_id:_{user_id}"
-        analysis = {
-            'people': set(),
-            'activities': set(),
-            'timed_patterns': []
-        }
-
-        # Обработка отношений
-        for rel in graph_data.get('relations', []):
-            source = rel['source'].replace(user_prefix, 'You') if user_prefix in rel['source'] else rel['source']
-            target = rel['target']
-            rel_type = rel['relationship'].lower()
-
-            # Собираем людей (исключая временные понятия)
-            if any(kwd in rel_type for kwd in ['of', 'with', 'has', 'is', 'knows']):
-                for person in [source, target]:
-                    if person.lower() not in ['week', 'month', 'day', 'none']:
-                        analysis['people'].add(person)
-
-            # Собираем активности
-            if any(kwd in rel_type for kwd in ['spends', 'does', 'at', 'on', 'engaged']):
-                if target.lower() not in ['week', 'month', 'day']:
-                    analysis['activities'].add(target)
-
-            # Временные паттерны
-            if any(time_word in target.lower() for time_word in ['week', 'month', 'day', 'year']):
-                analysis['timed_patterns'].append(f"{source} {rel['relationship']} {target}")
-
-        # Конвертируем множества в списки
-        return {
-            'people': list(analysis['people']),
-            'activities': list(analysis['activities']),
-            'timed_patterns': analysis['timed_patterns']
-        }
-
     try:
-        # Получаем данные из графа
-        graph_data = mem0_client_instance.get_all(user_id = user_id)
-        print(graph_data)
-        if not graph_data.get('results') and not graph_data.get('relations'):
-            return "It's been a while! How have you been?"
-
-        # Анализируем граф
-        analysis = analyze_graph_data(graph_data)
-        
-        # Формируем контекст
-        context_parts = []
-        if analysis['people']:
-            context_parts.append(f"People: {', '.join(analysis['people'])[:200]}")
-        if analysis['activities']:
-            context_parts.append(f"Activities: {', '.join(analysis['activities'])[:200]}")
-        if analysis['timed_patterns']:
-            context_parts.append(f"Recent: {analysis['timed_patterns'][-1]}")
-        
-        context = "\n".join(context_parts) if context_parts else "No recent activity"
-
-        print(context)
-        # Генерируем вопрос
-        prompt = f"""Generate exactly ONE natural follow-up question based on:
-        
-        {context}
-        
-        Guidelines:
-        - Sound like a caring friend
-        - Reference specific people/activities if possible
-        - Keep it under 20 words
-        - Use present tense
-        
-        Examples (DO NOT COPY):
-        "How's your mother doing?"
-        "Still meeting Julia for coffee weekly?"
-        """
-        
-        response = llm.invoke(prompt)
-        question = response.content.strip()
-        
-        # Проверка качества вопроса
-        if not question or len(question.split()) > 25:
-            return "How have you been lately?"
-        
-        return question
-
+        proactive_response = llm.invoke(prompt) # Use main LLM for a natural language suggestion
+        return proactive_response.content
     except Exception as e:
-        print(f"[ERROR] Question generation failed: {str(e)}")
-        return "Long time no see! How are things going?"
+        print(f"Error generating proactive query: {e}")
+        return "It's been a while! How are you doing today? Anything new or interesting happening?"
+    
+    
     
 # Renamed and re-purposed function
 def generate_proactive_query(recent_memories: List[dict]) -> str:
@@ -384,10 +215,6 @@ def get_system_prompt_template():
     Core Identity: {profile_description}
     Behavioral Traits: {profile_behavioral_traits}
 
-    **User's Current Context:**
-    Detected Mood: {user_mood}
-    Detected Intent: {user_intent}
-
     **Relevant Memories from Mem0 (for additional context, integrate naturally):**
     {relevant_memories}
 
@@ -402,4 +229,3 @@ def get_system_prompt_template():
     - Maintain conversational flow.
     - Do not explicitly mention 'mood', 'intent' detection, or 'memories' to the user in your natural conversation.
     """
-

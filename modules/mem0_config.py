@@ -101,36 +101,6 @@ Additional General Rules:
 
 """
 
-GRAPH_CUSTOM_PROMPT = """
-Extract and connect relationship-focused entities with these rules:
-1. PEOPLE: Extract names with properties: 
-   - relation_type (family/friend/partner/colleague) 
-   - frequency_mentioned (integer)
-   - last_mentioned (timestamp)
-   
-2. EVENTS: Create nodes for relationship milestones with:
-   - type (wedding/argument/vacation/etc.)
-   - date (when known)
-   - significance (high/medium/low)
-   
-3. EMOTIONS: Extract with properties:
-   - type (happy/sad/angry/etc.)
-   - intensity (1-10)
-   - trigger_person (when applicable)
-   - duration (brief/prolonged)
-   
-4. BELIEFS: Extract core values with:
-   - category (relationships/work/life)
-   - strength (strong/moderate)
-   
-Always create relationships between:
-- (User)-[HAS_RELATIONSHIP_WITH]->(Person)
-- (User)-[EXPERIENCED]->(Event)
-- (Event)-[INVOLVES]->(Person)
-- (User)-[FELT]->(Emotion)-[ABOUT]->(Person/Event)
-- (User)-[HOLDS_BELIEF]->(Belief)
-"""
-
 mem0_full_config = {
         "graph_store": {
             "provider": "neo4j",
