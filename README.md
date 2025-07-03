@@ -1,84 +1,120 @@
 ```markdown
-# Girls Chatbot Demo Project!
+# Girls Chatbot Demo
 
-This project is a demonstration chatbot application built with Streamlit. The chatbot uses Azure DeepAI models via LangChain for response generation, manages conversation context with Mem0, and supports dynamically generated profiles for users, as well as analyzing user mood and intentions to create a more friendly and supportive interaction.
+This project presents a Streamlit-based chatbot demonstration application that leverages advanced Mem0 memory features (with a Neo4j graph database and Mem0 Cloud vector database database), and an OpenAI LLM for dynamic persona configuration, mood analysis, and proactive interaction.
 
 ## Project Features
-- **Dynamic Persona Generation:** You can customize the chatbot's personality by selecting main character traits, formality level, and communication style via the sidebar.
 
-- **Mood and Intent Analysis:** The bot analyzes your messages to determine your mood and intentions, adapting its responses for more empathetic interactions.
-
-- **Memory Management with Mem0:** Uses Mem0 to store key information from conversations, such as personal user data, interests, preferences, and mood history. This allows the bot to "remember" you and use this information for contextual responses.
-
-- **User Profile:** Ability to generate/update a summarized user profile based on stored memories.
-
-- **Conversation Topic Suggestions:** Feature that suggests discussion topics based on your previous preferences.
-
-- **Mood Change History:** Visualization of your mood changes over time on a graph.
-
-## Prerequisites
-To run the project, you will need:
-
-- Python 3.11+
-
-- uv: A tool for managing Python packages. If you don't have it, install with:
-
-```bash
-pip install uv
-```
-
-## Project Installation
-Clone the repository (if applicable):
-
-```bash
-git clone <YOUR_REPOSITORY_URL>
-cd girl-bot
-```
-
-(If you're already in the `girl-bot` folder, skip this step)
-
-Install dependencies using uv:
-Navigate to the root directory where `pyproject.toml` is located and run:
-
-```bash
-uv pip install -e .
-```
-
-This will install all required dependencies listed in `pyproject.toml`, including `mem0ai`, `langchain`, `langchain_openai`, `streamlit`, `pydantic`, `python-dotenv`, `pandas`, `altair`.
-
-## Setting Up Environment Variables (.env)
-Create a file named `.env` in the root directory of your project (`girl-bot`). This file will contain your API keys and service connection details.
-
-Example `.env` content:
-
-```env
-OPENAI_API_KEY="YOUR_AZURE_OPENAI_API_KEY"
-OPENAI_API_ENDPOINT="YOUR_AZURE_OPENAI_ENDPOINT"
-OPENAI_MODEL_DEPLOYMENT_NAME="YOUR_AZURE_OPENAI_DEPLOYMENT_NAME"
-OPENAI_MODEL="OPENAI_MODEL" 
-MEM0_API_KEY="YOUR_MEM0_API_KEY"
-```
-
-## Running the Streamlit App
-After installing dependencies and setting up the `.env` file, run:
-
-```bash
-streamlit run app.py
-```
-
-This will open the application in your browser, typically at [http://localhost:8501](http://localhost:8501).
-
-## Using the Application
-- **Configure Persona:** Use the controls in the sidebar (left) to select "Main Character Traits," "Formality Level," and "Communication Style."
-
-- **Generate Persona:** Click the **"Generate Persona"** button in the sidebar to reset the bot's personality. The conversation will be reset.
-
-- **Chat:** Type your messages in the input field at the bottom of the screen.
-
-- **User Profile:** Talk to the bot about yourself (your name, interests, preferences). Then click **"Show/Update My Profile"** in the sidebar to view your summarized profile generated from Mem0 memories.
-
-- **Suggest Conversation Topics:** Click **"Suggest a Topic"** in the sidebar for the bot to recommend a conversation topic based on your previous preferences.
-
-- **Mood Change History:** Click **"Show Mood History"** in the sidebar to view a graph of your mood fluctuations over time.
+- **Dynamic Persona Generation:** Configure the chatbot's personality via the sidebar by selecting core character traits, formality levels, and communication styles.
+- **Mood and Intent Analysis:** The bot analyzes your messages to determine your mood and intentions, adapting its responses for a more empathetic interaction.
+- **Hybrid Mem0 Memory:** Utilizes both a local Neo4j graph database (running in Docker) for structured relationships like personal connections and events, and Mem0 Cloud vector database (for semantic search and general memory storage).
+- **User Profile:** Dynamically generated summary of the user's profile based on stored memories.
+- **Proactive Queries:** Two functions for re-engaging in conversation:
+  - **"Suggest a Topic"**: General topic suggestions (vector search).
+  - **"Generate Proactive Query (Graph Memory)"**: Personalized questions based on recent events and routines from the graph memory.
+- **Mood Change History:** Visualization of the user's mood dynamics over time.
+- **Content Moderation:** Filtering of controversial topics and potentially undesirable content.
 
 ---
+
+## Prerequisites
+
+To run this project, you will need:
+
+- **Docker Desktop** (or Docker Engine and Docker Compose)  
+  Ensure Docker is running.
+
+- **Internet connection** (to download Docker images and access OpenAI API and Mem0 Cloud).
+
+- **API Credentials:**
+  - **OpenAI API Key:** For accessing OpenAI models (LLM and embeddings).
+  - **Mem0 API Key:** For accessing Mem0 Cloud services.
+  - **Neo4j Credentials:** You will define these for your local Neo4j instance in the `.env` file (username `neo4j`, and a password you choose).
+
+*(Optional for developers: Python 3.11+ and uv for local development outside Docker.)*
+
+---
+
+## Setup and Running
+
+### 1. Clone the repository
+
+```bash
+git clone https://github.com/YOUR_USERNAME/girl-chatbot-demo.git
+cd girl-chatbot-demo
+```
+*(Replace `YOUR_USERNAME/girl-chatbot-demo.git` with the actual URL of your repository.)*
+
+### 2. Configure environment variables
+
+Create a file named `.env` in the root directory of the project (where `docker-compose.yml` is located).  
+Copy the content from the `.env.template` file (which you should create in the repository) into your new `.env` file.  
+Fill in `.env` with your actual API keys and define your local Neo4j credentials:
+
+```ini
+# .env
+OPENAI_API_KEY="YOUR_OPENAI_API_KEY"
+MEM0_API_KEY="YOUR_MEM0_API_KEY"
+NEO4J_URI="bolt://neo4j:7687" 
+NEO4J_USER="neo4j"
+NEO4J_PASSWORD="YOUR_CHOSEN_NEO4J_PASSWORD" Neo4j
+NEO4J_DATABASE="neo4j"
+```
+
+**ATTENTION:** This `.env` file contains your secrets. **NEVER commit it to Git!**
+
+### 3. Run Docker Containers
+
+In your terminal, navigate to the root directory of the project, then execute:
+
+```bash
+docker compose up --build
+```
+
+This command will:
+
+- Build the Docker images (if not already built or if there are changes).
+- Start all services defined in `docker-compose.yml` (your application, local Neo4j, and Qdrant).
+
+**Note on Neo4j:**  
+This command will start a new, local Neo4j database server within a Docker container. You do **not** need to run Neo4j Desktop or any other Neo4j application separately.
+
+### 4. Access the application
+
+After all services have started (this may take a few minutes, especially during the first launch of Neo4j and Qdrant), your Streamlit application will be accessible at:
+
+[http://localhost:8501](http://localhost:8501)
+
+### 5. Stop containers
+
+To stop all running containers and remove them (but preserve database data if you configured volumes in `docker-compose.yml`), execute:
+
+```bash
+docker compose down
+```
+
+---
+
+## Additional Steps (for developers)
+
+### Local dependency installation
+
+If you plan to actively develop or debug the application outside of Docker, it is recommended to install dependencies locally:
+
+```bash
+pip install -e .
+```
+
+### Database Inspection
+
+- **Neo4j Browser:**  
+  After running `docker compose up`, you can access the Neo4j Browser at [http://localhost:7474](http://localhost:7474).  
+  Use the credentials you defined in your `.env` file (`neo4j` as user, your password) to log in.
+
+- **Qdrant UI:**  
+  If you are using Qdrant and expose its UI port (usually `6333` or `6334`), you can also access it locally.
+
+---
+
+This updated `README.md` now clearly explains how to set up and run the application with a local Neo4j instance managed by Docker Compose.
+```

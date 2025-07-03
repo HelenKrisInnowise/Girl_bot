@@ -76,8 +76,6 @@ def get_user_personal_profile(user_memories: List[dict]) -> dict:
     """
     if not user_memories:
         return {"name": None, "interests": [], "preferences": [], "summary": "No personal information found."}
-    print(user_memories)
-    # memories_text = "\n".join([m['memory'] for m in user_memories])
     prompt = f"""
     Based on the following fragmented user memories, synthesize a coherent User Personal Profile.
     Extract the user's name, a list of their main interests, a list of other general preferences, and a brief overall summary.

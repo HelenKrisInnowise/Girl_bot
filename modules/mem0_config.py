@@ -102,26 +102,25 @@ Additional General Rules:
 """
 
 mem0_full_config = {
-        "graph_store": {
-            "provider": "neo4j",
-            "config": {
-                "url": "neo4j://localhost:7687",
-                "username": "neo4j",
-                "password": "Girls_bot",
-                "database": "neo4j",
-            }
-        },
-        "embedding": {
-            "model": "text-embedding-3-small"
-        },
-        "version": "v1.1"
-    }
-
+    "graph_store": {
+        "provider": "neo4j",
+        "config": {
+            "url": os.getenv("NEO4J_URI", "bolt://neo4j:7687"),  # Fallback to default if not set
+            "username": os.getenv("NEO4J_USER", "neo4j"),  # Default user is 'neo4j'
+            "password": os.getenv("NEO4J_PASSWORD"),  # Required, no default
+            "database": os.getenv("NEO4J_DATABASE", "neo4j"),  # Fallback to default DB
+        }
+    },
+    "embedding": {
+        "model": "text-embedding-3-small"
+    },
+    "version": "v1.1"
+}
 # Initialize Mem0 with the full configuration
 try:
     graph_mem0_client = Memory.from_config(config_dict=mem0_full_config)
 except Exception as e:
-    raise RuntimeError(f"Failed to initialize Mem0 (Graph Memory) client: {e}. Check MEM0_API_KEY, Neo4j, and OpenAI LLM configs.")
+    raise RuntimeError(f"Failed to initialize Mem0 client: {e}. Check MEM0_API_KEY, Neo4j, and OpenAI LLM configs.")
 
 
 

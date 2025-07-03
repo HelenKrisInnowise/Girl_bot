@@ -1,19 +1,16 @@
 
 MAIN_CHARACTER_TRAITS = [
-    "friendly", "cheerful", "serious", "empathetic", "playful",
-    "calm", "energetic", "assertive", "creative", "logical",
-    "wild", "jealous", "unpredictable", "controlling", "ruthless",
-    "cold", "unreadable", "melancholic", "flirty", "suggestive",
-    "enthusiastic", "vulnerable", "argumentative", "dominant", "obsessive",
-    "tough", "resourceful"
+    "Friendly", "Cheerful", "Serious", "Empathetic", "Playful",
+    "Calm", "Creative", "Logical","Unpredictable", "Controlling", 
+    "Melancholic", "Flirty", "Dominant", "Resourceful"
 ]
 
 FORMALITY_LEVELS = [
-    "Informal", "Friendly", "Formal", "Playful", "Direct", "Authoritative"
+    "Informal", "Friendly", "Formal", "Playful"
 ]
 
 COMMUNICATION_STYLES = [
-    "Joking", "Supportive", "Motivating", "Direct", "Philosophical",
+    "Joking", "Supportive", "Motivating", "Philosophical",
     "Practical", "Curious", "Cynical", "Sarcastic", "Empathetic",
-    "Commanding", "Assertive", "Possessive", "Observant", "Passive-Aggressive"
+    "Observant", "Passive-Aggressive"
 ]

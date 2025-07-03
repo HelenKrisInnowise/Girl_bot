@@ -243,15 +243,12 @@ if st.sidebar.button("Generate Proactive Query Vector"): # Renamed button
 
 # Display the last proactive query suggestion
 if st.session_state.proactive_query_suggestion:
-    st.sidebar.markdown(f"**Last Proactive Query:** {st.session_state.proactive_query_suggestion_vector}")
-    
+    st.sidebar.markdown(f"**Proactive Query Vector:** {st.session_state.proactive_query_suggestion_vector}")
 # --- 2. Generate Proactive Query on personal Graph memory (NEW button) ---
 if st.sidebar.button("Generate Proactive Query (Graph Memory)"): # New button
     with st.spinner("Thinking of a proactive query from graph memory..."):
         try:
-            # Call the new function, passing the mem0_client instance and user_id
             graph_data = graph_mem0_client.get_all(user_id = st.session_state.mem0_session_id)
-            # st.session_state.user_profile_summary_graph = get_user_personal_profile_graph(graph_data)
             proactive_query = generate_proactive_query_graph(graph_data)
             st.session_state.proactive_query_suggestion = proactive_query
             st.sidebar.info(f"**Proactive Query (Graph Memory):** {proactive_query}")
@@ -261,7 +258,8 @@ if st.sidebar.button("Generate Proactive Query (Graph Memory)"): # New button
 
 # Display the last proactive query suggestion
 if st.session_state.proactive_query_suggestion:
-    st.sidebar.markdown(f"**Last Proactive Query:** {st.session_state.proactive_query_suggestion}")
+    st.sidebar.markdown(f"**Proactive Query Vector:** {st.session_state.proactive_query_suggestion_vector}")
+    st.sidebar.markdown(f"**Proactive Query Graph:** {st.session_state.proactive_query_suggestion}")
 
 # --- Mood History Section ---
 st.sidebar.markdown("---")
@@ -348,7 +346,7 @@ if st.session_state.mood_history_data is not None and not st.session_state.mood_
     st.sidebar.altair_chart(chart, use_container_width=True)
 else:
     if st.sidebar.button("How to get Mood History?"):
-        st.sidebar.info("Chat with the bot, and your mood will be analyzed on each turn. Then click 'Show Mood History' to see the trend. Ensure your API key has necessary permissions for Mem0.")
+        st.sidebar.info("Chat with the bot, and your mood will be analyzed on each turn. Then click 'Show Mood History' to see the trend.")
 
 # --- Display Chat History (from Streamlit session state) ---
 for message in st.session_state.messages:

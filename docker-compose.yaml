@@ -1,6 +1,5 @@
-version: '3.8'
-
 services:
+  # Service for the local Neo4j database
   neo4j:
     image: neo4j:latest
     hostname: neo4j
@@ -10,29 +9,30 @@ services:
       - "7687:7687"
     environment:
       - NEO4J_AUTH=neo4j/${NEO4J_PASSWORD}
-      - NEO4J_db_name=${NEO4J_DATABASE} 
+      - NEO4J_dbms_default__database=${NEO4J_DATABASE}  # Note the double underscore
       - NEO4J_apoc_export_file_enabled=true
       - NEO4J_apoc_import_file_enabled=true
       - NEO4J_apoc_uuid_enabled=true
-      - NEO4J_dbms_security_procedures_unrestricted=apoc.*,algo.* 
+      - NEO4J_dbms_security_procedures_unrestricted=apoc.*,algo.*
     volumes:
-      - ./data/neo4j:/data 
+      - ./data/neo4j:/data
     healthcheck:
       test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider localhost:7474 || exit 1"]
       interval: 5s
       timeout: 5s
       retries: 5
-    restart: unless-stopped 
+    restart: unless-stopped
 
+  # Service for the Streamlit application
   app:
     build: .
-    container_name: streamlit-app 
+    container_name: streamlit-app
     ports:
       - "8501:8501"
     environment:
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - MEM0_API_KEY=${MEM0_API_KEY}
-      - NEO4J_URI=bolt://neo4j:7687 
+      - NEO4J_URI=bolt://neo4j:7687
       - NEO4J_USER=${NEO4J_USER}
       - NEO4J_PASSWORD=${NEO4J_PASSWORD}
       - NEO4J_DATABASE=${NEO4J_DATABASE}
