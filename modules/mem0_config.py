@@ -6,6 +6,7 @@ from mem0 import Memory
 load_dotenv() 
 
 os.environ["OPENAI_API_KEY"] = os.getenv("OPENAI_API_KEY")
+os.environ["MEM0_API_KEY"] = os.getenv("MEM0_API_KEY")
 
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 NEO4J_URI = os.getenv("NEO4J_URI")
