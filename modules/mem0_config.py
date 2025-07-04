@@ -147,21 +147,31 @@ mem0_client = None
 graph_mem0_client = None
 
 
-def initialize_mem0_clients():
-    global mem0_client, graph_mem0_client # Declare global to modify them
-    try:
-        mem0_client = AsyncMemoryClient(api_key=os.getenv("MEM0_API_KEY"))
-        graph_mem0_client = AsyncMemory(config=custom_config)
-        mem0_client.update_project(
-            custom_categories=MEM0_CUSTOM_CATEGORIES,
-            custom_instructions=MEM0_CUSTOM_INSTRUCTIONS
-        )
-        print("Mem0 (Vector) project updated with custom categories and instructions.")
+# def initialize_mem0_clients():
+#     global mem0_client, graph_mem0_client # Declare global to modify them
+#     try:
+#         mem0_client = AsyncMemoryClient(api_key=os.getenv("MEM0_API_KEY"))
+#         graph_mem0_client = AsyncMemory(config=custom_config)
+#         mem0_client.update_project(
+#             custom_categories=MEM0_CUSTOM_CATEGORIES,
+#             custom_instructions=MEM0_CUSTOM_INSTRUCTIONS
+#         )
+#         print("Mem0 (Vector) project updated with custom categories and instructions.")
 
-    except Exception as e:
-        print(f"Failed to initialize Mem0 clients: {e}. Check OpenAI API Key, Mem0 API Key, Neo4j configs.")
-        # Re-raise the exception to indicate a critical startup failure
-        raise
-    return mem0_client, graph_mem0_client 
+#     except Exception as e:
+#         print(f"Failed to initialize Mem0 clients: {e}. Check OpenAI API Key, Mem0 API Key, Neo4j configs.")
+#         # Re-raise the exception to indicate a critical startup failure
+#         raise
+#     return mem0_client, graph_mem0_client 
 
-mem0_client, graph_mem0_client = initialize_mem0_clients()
+# mem0_client, graph_mem0_client = initialize_mem0_clients()
+async def create_mem0_clients():
+    """Factory function to create and initialize clients"""
+    mem0_client = AsyncMemoryClient(api_key=os.getenv("MEM0_API_KEY"))
+    graph_mem0_client = AsyncMemory(config=custom_config)
+    
+    await mem0_client.update_project(
+        custom_categories=MEM0_CUSTOM_CATEGORIES,
+        custom_instructions=MEM0_CUSTOM_INSTRUCTIONS
+    )
+    return mem0_client, graph_mem0_client

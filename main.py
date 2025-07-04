@@ -1,10 +1,12 @@
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException, Request
 from pydantic import BaseModel
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, Annotated 
 import asyncio
 import uuid
 from datetime import datetime, timedelta
+from fastapi import Depends  # For dependency injection
+from mem0 import AsyncMemoryClient, AsyncMemory  # Import your Mem0 client types
 
 # Import client factory instead of direct clients
 from modules.mem0_config import create_mem0_clients
@@ -29,11 +31,10 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Girls Chatbot Backend", lifespan=lifespan)
 
-# --- Dependency Injections ---
-async def get_mem0_client(request: Request):
+async def get_mem0_client(request: Request) -> AsyncMemoryClient:
     return request.app.state.mem0_client
 
-async def get_graph_client(request: Request):
+async def get_graph_client(request: Request) -> AsyncMemory:
     return request.app.state.graph_mem0_client
 
 # --- Pydantic Models ---
@@ -173,10 +174,11 @@ async def chat_endpoint(
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+    
 @app.post("/get_user_profile_vector")
 async def get_user_profile_vector_endpoint(
     user_id: str,
-    mem0_client: AsyncMemoryClient = Depends(get_mem0_client)
+    mem0_client: Annotated[AsyncMemoryClient, Depends(get_mem0_client)]
 ):
     try:
         profile_summary = await get_user_personal_profile(mem0_client, user_id)
