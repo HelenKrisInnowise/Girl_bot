@@ -6,7 +6,9 @@ import pandas as pd
 import altair as alt
 from datetime import datetime, timedelta
 import httpx 
+import json
 from pydantic import BaseModel 
+from typing import Literal
 from modules.profiles import MAIN_CHARACTER_TRAITS, FORMALITY_LEVELS, COMMUNICATION_STYLES
 
 class Message(BaseModel):
@@ -17,7 +19,7 @@ load_dotenv()
 
 FASTAPI_BACKEND_URL = os.getenv("FASTAPI_BACKEND_URL", "http://localhost:8000")
 
-# Basic check for essential environment variables (others will be checked by FastAPI backend)
+# Basic check for essential environment variables
 if not all([os.getenv("OPENAI_API_KEY"), os.getenv("MEM0_API_KEY")]):
     st.error("Please ensure OPENAI_API_KEY and MEM0_API_KEY are set in your .env file.")
     st.stop()
@@ -53,7 +55,7 @@ st.markdown(
 
 st.title("Girls Chatbot Demo (FastAPI Backend)")
 
-# --- Mood Mapping for Visualization (Frontend only, for chart display) ---
+# --- Mood Mapping for Visualization ---
 MOOD_SCORE_MAP = {
     "joyful": 5, "excited": 4, "neutral": 3, "confused": 2.5, "surprised": 3.5,
     "fearful": 1.5, "anxious": 1.7, "sad": 1, "angry": 0.5, "disgusted": 0
@@ -70,27 +72,25 @@ if "mem0_session_id" not in st.session_state:
         "description": "A versatile chatbot waiting for your personality settings.",
         "behavioral_traits": "The chatbot will be neutral until specific traits are selected."
     }
-
     st.session_state.user_profile_summary = None
     st.session_state.user_profile_summary_graph = None
     st.session_state.mood_history_data = None
-    st.session_state.proactive_query_suggestion_vector = None # Separate for vector proactive query
-    st.session_state.proactive_query_suggestion_graph = None # Separate for graph proactive query
-
+    st.session_state.proactive_query_suggestion_vector = None
+    st.session_state.proactive_query_suggestion_graph = None
+    st.session_state.chat_mode = "streaming"
 
     # Call backend to add initial memory
     try:
         with httpx.Client(timeout=120.0) as client:
             response = client.post(f"{FASTAPI_BACKEND_URL}/add_initial_memory", 
-                                   params={"user_id": st.session_state.mem0_session_id, 
-                                           "description": st.session_state.dynamic_profile['description']})
+                                 params={"user_id": st.session_state.mem0_session_id, 
+                                        "description": st.session_state.dynamic_profile['description']})
             response.raise_for_status()
-            st.info("Initial memory added to Mem0 (Graph Memory) for this session.")
+            st.info("Initial memory added to Mem0 for this session.")
     except httpx.HTTPStatusError as e:
-        st.warning(f"Could not add initial memory to Mem0 (Graph Memory): {e.response.text}")
+        st.warning(f"Could not add initial memory: {e.response.text}")
     except Exception as e:
-        st.warning(f"Could not add initial memory to Mem0 (Graph Memory): {e}")
-
+        st.warning(f"Could not add initial memory: {e}")
 
 # --- Dynamic Profile Selection UI in Sidebar ---
 st.sidebar.header("Configure Chatbot Persona")
@@ -118,7 +118,7 @@ selected_style = st.sidebar.selectbox(
 
 if st.sidebar.button("Generate Persona"):
     if not selected_traits and selected_formality == "Friendly" and selected_style == "Supportive":
-        st.sidebar.warning("Please select at least one characteristic or change defaults to generate a persona.")
+        st.sidebar.warning("Please select at least one characteristic or change defaults.")
     else:
         with st.spinner("Generating new persona..."):
             try:
@@ -136,22 +136,21 @@ if st.sidebar.button("Generate Persona"):
                 st.session_state.selected_formality = selected_formality
                 st.session_state.selected_style = selected_style
                 st.session_state.messages = []
-                st.session_state.mem0_session_id = str(uuid.uuid4()) # New session ID for new persona
+                st.session_state.mem0_session_id = str(uuid.uuid4())
                 st.session_state.user_profile_summary = None
                 st.session_state.user_profile_summary_graph = None
                 st.session_state.mood_history_data = None
                 st.session_state.proactive_query_suggestion_vector = None
-                st.session_state.proactive_query_suggestion_graph = None
-                # st.session_state.suggested_topic_query = None
 
-                # Add initial memory for the new persona via backend
+
+                # Add initial memory for new persona
                 with httpx.Client(timeout=120.0) as client:
                     response = client.post(f"{FASTAPI_BACKEND_URL}/add_initial_memory", 
-                                           params={"user_id": st.session_state.mem0_session_id, 
-                                                   "description": st.session_state.dynamic_profile['description']})
+                                         params={"user_id": st.session_state.mem0_session_id, 
+                                                "description": st.session_state.dynamic_profile['description']})
                     response.raise_for_status()
                 st.sidebar.success("Persona updated! Conversation reset.")
-                st.rerun() # Rerun to clear chat and apply new persona
+                st.rerun()
             except httpx.HTTPStatusError as e:
                 st.sidebar.error(f"Error generating persona: {e.response.text}")
             except Exception as e:
@@ -165,56 +164,66 @@ st.sidebar.markdown(f"**Selected Traits:** {', '.join(st.session_state.selected_
 st.sidebar.markdown(f"**Formality:** {st.session_state.selected_formality}")
 st.sidebar.markdown(f"**Style:** {st.session_state.selected_style}")
 
-# --- User Personal Profile Sections ---
+# --- Chat Mode Selection ---
+st.sidebar.markdown("---")
+st.sidebar.subheader("Chat Mode")
+chat_mode = st.sidebar.radio(
+    "Select chat mode:",
+    ["Regular", "Streaming"],
+    index=0 if st.session_state.chat_mode == "regular" else 1,
+    key="chat_mode_selector"
+)
+st.session_state.chat_mode = "regular" if chat_mode == "Regular" else "streaming"
+
+# --- User Profile Sections ---
 st.sidebar.markdown("---")
 st.sidebar.subheader("User Personal Profiles")
 
 if st.sidebar.button("Show/Update My Vector Profile"):
-    with st.spinner("Fetching and summarizing your profile from vector memory..."):
+    with st.spinner("Fetching vector profile..."):
         try:
             with httpx.Client(timeout=120.0) as client:
                 response = client.post(f"{FASTAPI_BACKEND_URL}/get_user_profile_vector", 
-                                       params={"user_id": st.session_state.mem0_session_id})
+                                     params={"user_id": st.session_state.mem0_session_id})
                 response.raise_for_status()
                 st.session_state.user_profile_summary = response.json()["profile_summary"]
             st.sidebar.success("User vector profile updated!")
         except httpx.HTTPStatusError as e:
-            st.sidebar.error(f"Error fetching/summarizing vector profile: {e.response.text}")
+            st.sidebar.error(f"Error fetching vector profile: {e.response.text}")
         except Exception as e:
-            st.sidebar.error(f"Error fetching/summarizing vector profile: {e}")
+            st.sidebar.error(f"Error fetching vector profile: {e}")
 
 if st.session_state.user_profile_summary:
     profile = st.session_state.user_profile_summary
     st.sidebar.markdown(f"**Name (Vector):** {profile['name'] if profile['name'] else 'Not found'}")
     st.sidebar.markdown(f"**Summary (Vector):** {profile['summary']}")
 else:
-    st.sidebar.info("Click 'Show/Update My Vector Profile' to generate your personal profile based on vector memory.")
-
+    st.sidebar.info("Click above to generate your personal profile")
 
 if st.sidebar.button("Generate Proactive Query (Vector)"):
-    with st.spinner("Thinking of a proactive query from vector memory..."):
+    with st.spinner("Thinking of a proactive query..."):
         try:
             with httpx.Client(timeout=120.0) as client:
                 response = client.post(f"{FASTAPI_BACKEND_URL}/generate_proactive_query_vector", 
-                                       params={"user_id": st.session_state.mem0_session_id})
+                                     params={"user_id": st.session_state.mem0_session_id})
                 response.raise_for_status()
                 st.session_state.proactive_query_suggestion_vector = response.json()["proactive_query"]
             st.sidebar.info(f"**Proactive Query (Vector):** {st.session_state.proactive_query_suggestion_vector}")
         except httpx.HTTPStatusError as e:
-            st.sidebar.error(f"Error generating proactive query (Vector): {e.response.text}")
+            st.sidebar.error(f"Error generating query: {e.response.text}")
         except Exception as e:
-            st.sidebar.error(f"Error generating proactive query (Vector): {e}")
+            st.sidebar.error(f"Error generating query: {e}")
 
 # --- Mood History Section ---
 st.sidebar.markdown("---")
 st.sidebar.subheader("User Mood History")
 
 if st.sidebar.button("Show Mood History"):
-    with st.spinner("Fetching and processing mood history..."):
+    with st.spinner("Fetching mood history..."):
         try:
             with httpx.Client(timeout=120.0) as client:
                 response = client.post(f"{FASTAPI_BACKEND_URL}/get_mood_history", 
-                                       params={"user_id": st.session_state.mem0_session_id})
+                                     params={"user_id": st.session_state.mem0_session_id})
                 response.raise_for_status()
                 mood_history_data_raw = response.json()["mood_history_data"]
             
@@ -227,7 +236,6 @@ if st.sidebar.button("Show Mood History"):
             else:
                 st.session_state.mood_history_data = None
                 st.sidebar.info("No mood history found yet. Chat more to generate data!")
-
         except httpx.HTTPStatusError as e:
             st.sidebar.error(f"Error fetching mood history: {e.response.text}")
         except Exception as e:
@@ -239,70 +247,90 @@ if st.session_state.mood_history_data is not None and not st.session_state.mood_
     chart = alt.Chart(st.session_state.mood_history_data).mark_line(point=True).encode(
         x=alt.X('time', axis=alt.Axis(title='Time', format='%H:%M')),
         y=alt.Y('mood_score', axis=alt.Axis(title='Mood Score', values=list(MOOD_SCORE_MAP.values()),
-                                            labelExpr="datum.value == 0.5 ? 'Angry' : datum.value == 1 ? 'Sad' : datum.value == 1.5 ? 'Fearful' : datum.value == 1.7 ? 'Anxious' : datum.value == 2.5 ? 'Confused' : datum.value == 3 ? 'Neutral' : datum.value == 3.5 ? 'Surprised' : datum.value == 4 ? 'Excited' : datum.value == 5 ? 'Joyful' : ''")),
+                                          labelExpr="datum.value == 0.5 ? 'Angry' : datum.value == 1 ? 'Sad' : datum.value == 1.5 ? 'Fearful' : datum.value == 1.7 ? 'Anxious' : datum.value == 2.5 ? 'Confused' : datum.value == 3 ? 'Neutral' : datum.value == 3.5 ? 'Surprised' : datum.value == 4 ? 'Excited' : datum.value == 5 ? 'Joyful' : ''")),
         tooltip=['time', 'mood', 'mood_score']
     ).properties(
         title='User Mood Trend'
     ).interactive()
     
     st.sidebar.altair_chart(chart, use_container_width=True)
-else:
-    if st.sidebar.button("How to get Mood History?"):
-        st.sidebar.info("Chat with the bot, and your mood will be analyzed on each turn. Then click 'Show Mood History' to see the trend.")
 
-# --- Display Chat History (from Streamlit session state) ---
-# This loop displays ALL messages currently in st.session_state.messages
+# --- Display Chat History ---
 for message in st.session_state.messages:
     st.chat_message(message.role).markdown(message.content)
 
 # --- Chat Input and Logic ---
 prompt = st.chat_input("Type your message here...")
 
+# Modify the streaming chat section in your Streamlit app:
+
+# Modify the streaming chat section in your Streamlit app:
+
 if prompt:
-    # Add user's message to Streamlit's session state immediately for display
     st.session_state.messages.append(Message(role="user", content=prompt))
-    # Display the user's message immediately in the chat UI
     with st.chat_message("user"):
         st.markdown(prompt)
 
-    # Prepare request payload for FastAPI chat endpoint
     chat_payload = {
         "user_id": st.session_state.mem0_session_id,
         "prompt": prompt,
-        # Send the *entire current* messages list to the backend for context
-        "messages": [{"role": m.role, "content": m.content} for m in st.session_state.messages], 
+        "messages": [msg.dict() for msg in st.session_state.messages],
         "selected_traits": st.session_state.selected_traits,
         "selected_formality": st.session_state.selected_formality,
         "selected_style": st.session_state.selected_style,
         "dynamic_profile": st.session_state.dynamic_profile
     }
 
-    try:
-        with httpx.Client(timeout=180.0) as client:
-            response = client.post(f"{FASTAPI_BACKEND_URL}/chat", json=chat_payload)
-            response.raise_for_status()
-            chat_response_data = response.json()
-        
-        # Update Streamlit session state with response from backend
-        # The backend returns the *updated* messages list (including bot's response)
-        st.session_state.messages = [Message(role=msg['role'], content=msg['content']) for msg in chat_response_data["messages"]]
-        
-        # Update mood and intent from backend response
-        st.session_state.current_mood = chat_response_data.get("user_mood_str")
-        st.session_state.current_intent = chat_response_data.get("user_intent_str")
-        
-        # Display relevant memories and user analysis in sidebar (from backend response)
-        if chat_response_data.get("relevant_memories_str") and chat_response_data["relevant_memories_str"] != "No relevant memories found.":
-            st.sidebar.subheader("Mem0 Search Results:")
-            st.sidebar.markdown(chat_response_data["relevant_memories_str"])
-        else:
-            st.sidebar.subheader("Mem0 Search Results:")
-            st.sidebar.info("No relevant memories found in Mem0 for this query.")
-
-
-        st.rerun() # Rerun Streamlit to update chat history and sidebar
-    except httpx.HTTPStatusError as e:
-        st.error(f"Chat error: {e.response.text}")
-    except Exception as e:
-        st.error(f"An unexpected error occurred during chat: {e}")
-
+    if st.session_state.chat_mode == "regular":
+        try:
+            with httpx.Client(timeout=180.0) as client:
+                response = client.post(f"{FASTAPI_BACKEND_URL}/chat", json=chat_payload)
+                response.raise_for_status()
+                chat_response_data = response.json()
+            
+            st.session_state.messages = [Message(**msg) for msg in chat_response_data["messages"]]
+            
+            if chat_response_data.get("relevant_memories_str"):
+                st.sidebar.subheader("Mem0 Search Results:")
+                st.sidebar.markdown(chat_response_data["relevant_memories_str"])
+            
+            st.rerun()
+        except Exception as e:
+            st.error(f"Error: {str(e)}")
+    else:
+        with st.chat_message("assistant"):
+            message_placeholder = st.empty()
+            full_response = ""
+            
+            try:
+                with httpx.Client(timeout=180.0) as client:
+                    with client.stream(
+                        "POST",
+                        f"{FASTAPI_BACKEND_URL}/chat_stream",
+                        json=chat_payload
+                    ) as response:
+                        response.raise_for_status()
+                        
+                        for line in response.iter_lines():
+                            if line:
+                                data = json.loads(line)
+                                if "error" in data:
+                                    raise Exception(data["error"])
+                                
+                                chunk = data["response"]
+                                full_response += chunk
+                                message_placeholder.markdown(full_response + "▌")
+                                
+                                # Update messages with the latest response
+                                st.session_state.messages = [
+                                    Message(**msg) for msg in data["messages"]
+                                ]
+                
+                message_placeholder.markdown(full_response)
+                
+                if data.get("relevant_memories_str"):
+                    st.sidebar.subheader("Mem0 Search Results:")
+                    st.sidebar.markdown(data["relevant_memories_str"])
+                
+            except Exception as e:
+                st.error(f"Error during streaming: {str(e)}")

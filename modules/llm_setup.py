@@ -21,7 +21,6 @@ llm = ChatOpenAI(
 )
 
 mood_llm = llm.with_structured_output(MoodAttributes, method="function_calling", include_raw=True)
-# intent_llm = llm.with_structured_output(IntentAttributes, method="function_calling", include_raw=True)
 
 class DynamicProfileOutput(BaseModel):
     description: str = Field(description="A concise description of the chatbot persona based on the selected traits, formality, and style.")
@@ -99,83 +98,6 @@ async def get_user_personal_profile(mem0_client_instance, user_id: str) -> dict:
     except Exception as e:
         print(f"Error generating user personal profile: {e}")
         return {"name": None, "summary": f"Could not generate profile: {e}"}
-
-# async def get_user_personal_profile_graph(graph_mem0_client_instance, user_id: str) -> dict: # Made async, takes graph client
-#     if not user_id: return {"name": None, "summary": "User ID is missing."}
-    
-#     graph_memories_text = await graph_mem0_client_instance.get_all(user_id=user_id) # Await call
-
-#     if not graph_memories_text:
-#         return {"name": None, "summary": "No personal graph information found."}
-
-#     # graph_memories_text = "\n".join([m.get('memory', '') for m in graph_data if m.get('memory')])
-
-#     # if not graph_memories_text.strip():
-#     #     return {"name": None, "summary": "No relevant graph memories with text found."}
-
-#     prompt = f"""
-#     Analyze this graph, built from messages from the user to the bot and tell about the user everything you can understand from this graph.
-#     Create a psychological portrait of the user.
-
-#     User Graph:
-#     {graph_memories_text}
-
-#     Output should strictly adhere to the UserProfile Pydantic model.
-#     """
-#     try:
-#         profile_summary = user_profile_llm.invoke(prompt)
-#         return profile_summary.model_dump()
-#     except Exception as e:
-#         print(f"Error generating user personal profile from graph: {e}")
-#         return {"name": None, "summary": f"Could not generate graph profile: {e}"}
-
-
-# async def generate_proactive_query_graph(graph_mem0_client_instance, user_id: str) -> str: # Made async, takes graph client
-#     # thirty_days_ago = datetime.now() - timedelta(days=30)
-#     # thirty_days_ago_iso = thirty_days_ago.isoformat(timespec='seconds') + 'Z'
-#     # filters = {
-#     #     "AND": [
-#     #         {"user_id": user_id},
-#     #         {"created_at": {"gte": thirty_days_ago_iso}},
-#     #     ]
-#     # }
-
-#     recent_memories = []
-#     try:
-#         recent_memories = await graph_mem0_client_instance.get_all( # Await call
-#             # filters=filters,
-#             # page_size=20,
-#             user_id=user_id
-#         )
-#     except Exception as e:
-#         print(f"Error fetching relationship memories from graph: {e}")
-#         return "It's been a while! How are you doing today? Anything new or interesting happening?"
-
-#     if not recent_memories:
-#         return "It's been a while! How are you doing today? Anything new or interesting happening? Perhaps we could talk about your recent activities or goals?"
-
-#     # memories_content = "\n".join([f"- {m['memory']}" for m in recent_relationship_memories])
-#     prompt = f"""
-#     Analyze this graph, built from messages from the user to the bot and based on this graph
-#     formulate a message with a question or a phrase implying a response.
-#     The goal is to proactively and empathetically re-engage the user, as if you haven't chatted for a while.
-#     Make the message sound natural, friendly, and caring.
-
-#     User's memory graph:
-#     {recent_memories}
-
-#     Example of desired output:
-#     "Hi! Was thinking about your trip plans—did you end up booking that getaway you were dreaming about?"
-#     "Hey you! How's your week been? Did you ever get around to reorganizing your workspace like you planned?"
-#     "Hi! Just checking in—how's everything going with your new team? Settling in okay?"
-#     "Hey there! How's the painting project coming along? Still finding time for it?"
-#     """
-#     try:
-#         proactive_response = llm.invoke(prompt)
-#         return proactive_response.content
-#     except Exception as e:
-#         print(f"Error generating proactive query from relationship graph data: {e}")
-#         return "I'm having a bit of trouble coming up with a new topic right now. Is there anything specific you'd like to talk about?"
 
 async def generate_proactive_query(mem0_client_instance, user_id: str) -> str: # Made async, takes client
     ten_days_ago = datetime.now() - timedelta(days=10)

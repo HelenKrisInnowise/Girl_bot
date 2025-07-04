@@ -1,9 +1,7 @@
 import os
 from dotenv import load_dotenv
-from mem0 import AsyncMemory 
-from mem0.configs.base import MemoryConfig
 from mem0 import AsyncMemoryClient
-import asyncio
+
 
 load_dotenv()
 os.environ["MEM0_API_KEY"] = os.getenv("MEM0_API_KEY")

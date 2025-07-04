@@ -93,85 +93,96 @@ async def add_initial_memory_endpoint(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Could not add initial memory: {e}")
 
-@app.post("/chat", response_model=ChatResponse)
-async def chat_endpoint(
+from fastapi.responses import StreamingResponse
+import json
+
+from fastapi.responses import StreamingResponse
+import json
+
+@app.post("/chat_stream")
+async def chat_endpoint_streaming(
     request: ChatRequest,
     mem0_client: AsyncMemoryClient = Depends(get_mem0_client),
-    # graph_mem0_client: AsyncMemory = Depends(get_graph_client)
 ):
-    try:
-        # Controversial topic detection
-        controversial_analysis_result = await detect_controversial_topic(request.prompt)
-        if controversial_analysis_result.get('is_controversial'):
-            category = controversial_analysis_result.get('category', 'undefined')
-            refusal_message = f"I cannot discuss topics related to {category}..."
-            
-            await mem0_client.add(
-                messages=[{
+    async def generate():
+        try:
+            # Controversial topic detection
+            controversial_analysis_result = await detect_controversial_topic(request.prompt)
+            if controversial_analysis_result.get('is_controversial'):
+                category = controversial_analysis_result.get('category', 'undefined')
+                refusal_message = f"I cannot discuss topics related to {category}..."
+                
+                await mem0_client.add(messages=[{
                     "role": "assistant", 
                     "content": f"Refused to discuss: {category} for message: '{request.prompt}'"
-                }],
-                user_id=request.user_id,
-                categories=["chatbot_interactions"]
-            )
-            
-            request.messages.append(Message(role="assistant", content=refusal_message))
-            return ChatResponse(
-                response=refusal_message,
-                messages=request.messages,
-                relevant_memories_str="N/A"
+                }], user_id=request.user_id)
+                
+                yield json.dumps({
+                    "response": refusal_message,
+                    "messages": [msg.dict() for msg in request.messages] + [
+                        {"role": "assistant", "content": refusal_message}
+                    ],
+                    "relevant_memories_str": "N/A"
+                }) + "\n"
+                return
+
+            # Store messages
+            await mem0_client.add(
+                messages=[{"role": "user", "content": request.prompt}],
+                user_id=request.user_id
             )
 
-        # Store messages
-        await mem0_client.add(
-            messages=[{"role": "user", "content": request.prompt}],
-            user_id=request.user_id
-        )
+            # Get relevant memories
+            relevant_memories_str = "No relevant memories found."
+            try:
+                search_results = await mem0_client.search(
+                    query=request.prompt,
+                    user_id=request.user_id,
+                    limit=3
+                )
+                if search_results:
+                    relevant_memories_str = "\n".join([f"- {m['memory']}" for m in search_results])
+            except Exception as e:
+                print(f"Search error: {e}")
 
-
-        # Get relevant memories
-        relevant_memories_str = "No relevant memories found."
-        try:
-            search_results = await mem0_client.search(
-                query=request.prompt,
-                user_id=request.user_id,
-                limit=3
+            # Prepare system message
+            system_message_content = get_system_prompt_template().format(
+                persona_name="Dynamically Generated Persona",
+                profile_description=request.dynamic_profile['description'],
+                profile_behavioral_traits=request.dynamic_profile['behavioral_traits'],
+                relevant_memories=relevant_memories_str,
             )
-            if search_results:
-                relevant_memories_str = "\n".join([f"- {m['memory']}" for m in search_results])
+
+            # Prepare messages for LLM
+            llm_messages = [SystemMessage(content=system_message_content)]
+            for msg in request.messages:
+                llm_messages.append(
+                    HumanMessage(content=msg.content) if msg.role == "user" 
+                    else AIMessage(content=msg.content)
+                )
+            llm_messages.append(HumanMessage(content=request.prompt))
+
+            # Stream the response
+            full_response = ""
+            async for chunk in llm.astream(llm_messages):
+                content = chunk.content
+                full_response += content
+                yield json.dumps({
+                    "response": content,
+                    "messages": [msg.dict() for msg in request.messages] + [
+                        {"role": "assistant", "content": full_response}
+                    ],
+                    "relevant_memories_str": relevant_memories_str
+                }) + "\n"
+
         except Exception as e:
-            print(f"Search error: {e}")
+            yield json.dumps({
+                "error": str(e),
+                "status_code": 500
+            }) + "\n"
 
-        # Generate response
-        system_message_content = get_system_prompt_template().format(
-            persona_name="Dynamically Generated Persona",
-            profile_description=request.dynamic_profile['description'],
-            profile_behavioral_traits=request.dynamic_profile['behavioral_traits'],
-            relevant_memories=relevant_memories_str,
-        )
+    return StreamingResponse(generate(), media_type="text/event-stream")
 
-        llm_messages = [SystemMessage(content=system_message_content)]
-        for msg in request.messages:
-            llm_messages.append(
-                HumanMessage(content=msg.content) if msg.role == "user" 
-                else AIMessage(content=msg.content)
-            )
-        llm_messages.append(HumanMessage(content=request.prompt))
-
-        assistant_response = await asyncio.to_thread(llm.invoke, llm_messages)
-        response_content = assistant_response.content
-        
-        updated_messages = request.messages.copy()
-        updated_messages.append(Message(role="assistant", content=response_content))
-
-        return ChatResponse(
-            response=response_content,
-            messages=updated_messages,
-            relevant_memories_str=relevant_memories_str,
-        )
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-    
 @app.post("/get_user_profile_vector")
 async def get_user_profile_vector_endpoint(
     user_id: str,
