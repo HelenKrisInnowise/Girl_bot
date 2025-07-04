@@ -5,30 +5,31 @@ from dotenv import load_dotenv
 import pandas as pd
 import altair as alt
 from datetime import datetime, timedelta
-
-# Import components from submodules
-from modules.mem0_config import mem0_client, graph_mem0_client 
+import httpx 
+from pydantic import BaseModel 
 from modules.profiles import MAIN_CHARACTER_TRAITS, FORMALITY_LEVELS, COMMUNICATION_STYLES
-from modules.llm_setup import generate_proactive_query, llm, mood_llm, get_system_prompt_template, generate_dynamic_profile, get_user_personal_profile, get_user_personal_profile_graph, generate_proactive_query_graph, detect_controversial_topic
-from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
-from pydantic import BaseModel
 
-# --- 0. Project Setup: Load Environment Variables ---
+class Message(BaseModel):
+    role: str
+    content: str
+
 load_dotenv()
 
-if not all([os.getenv("OPENAI_API_KEY"),os.getenv("MEM0_API_KEY"),
-            os.getenv("NEO4J_URI"), os.getenv("NEO4J_USERNAME"), os.getenv("NEO4J_PASSWORD")]):
-    st.error("Please ensure all required environment variables are set in your .env file, including Neo4j credentials.")
+FASTAPI_BACKEND_URL = os.getenv("FASTAPI_BACKEND_URL", "http://localhost:8000")
+
+# Basic check for essential environment variables (others will be checked by FastAPI backend)
+if not all([os.getenv("OPENAI_API_KEY"), os.getenv("MEM0_API_KEY")]):
+    st.error("Please ensure OPENAI_API_KEY and MEM0_API_KEY are set in your .env file.")
     st.stop()
 
 # --- Streamlit UI Setup ---
-st.set_page_config(page_title="Girls Chatbot Demo (Neo4j Graph Memory)", layout="centered")
+st.set_page_config(page_title="Girls Chatbot Demo (FastAPI Backend)", layout="centered")
 st.markdown(
     """
     <style>
     body { overflow-x: hidden; }
     .main .block-container {
-        max-width: 800px; padding-top: 1rem; padding-right: 1rem; padding-left: 1rem; padding-bottom: 100px;
+        max_width: 800px; padding-top: 1rem; padding-right: 1rem; padding-left: 1rem; padding-bottom: 100px;
     }
     .stChatInput {
         position: fixed; bottom: 0; left: 165px; width: calc(100% - 165px); padding: 10px;
@@ -50,9 +51,9 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-st.title("Girls Chatbot Demo (Neo4j Graph Memory)") # Updated title
+st.title("Girls Chatbot Demo (FastAPI Backend)")
 
-# --- Mood Mapping for Visualization ---
+# --- Mood Mapping for Visualization (Frontend only, for chart display) ---
 MOOD_SCORE_MAP = {
     "joyful": 5, "excited": 4, "neutral": 3, "confused": 2.5, "surprised": 3.5,
     "fearful": 1.5, "anxious": 1.7, "sad": 1, "angry": 0.5, "disgusted": 0
@@ -69,22 +70,28 @@ if "mem0_session_id" not in st.session_state:
         "description": "A versatile chatbot waiting for your personality settings.",
         "behavioral_traits": "The chatbot will be neutral until specific traits are selected."
     }
-    st.session_state.current_mood = None
-    st.session_state.current_intent = None
+    # st.session_state.current_mood = "Not detected." # Initialize with string
+    # st.session_state.current_intent = "Not detected." # Initialize with string
     st.session_state.user_profile_summary = None
     st.session_state.user_profile_summary_graph = None
     st.session_state.mood_history_data = None
-    st.session_state.proactive_query_suggestion = None
-    st.session_state.suggested_topic_query = None # New state for suggested topic
+    st.session_state.proactive_query_suggestion_vector = None # Separate for vector proactive query
+    st.session_state.proactive_query_suggestion_graph = None # Separate for graph proactive query
+    # st.session_state.suggested_topic_query = None
 
+    # Call backend to add initial memory
     try:
-        # Initial add to Mem0 will now use Graph Memory configured in modules/mem0_config.py
-        mem0_client.add(messages=[
-            {"role": "assistant", "content": "I am a chatbot designed to embody various girl personas. Use the sidebar to configure my personality!"}
-        ], user_id=st.session_state.mem0_session_id)
-        st.info("Initial memory added to Mem0 (with Graph Memory) for this session.")
+        with httpx.Client(timeout=120.0) as client:
+            response = client.post(f"{FASTAPI_BACKEND_URL}/add_initial_memory", 
+                                   params={"user_id": st.session_state.mem0_session_id, 
+                                           "description": st.session_state.dynamic_profile['description']})
+            response.raise_for_status()
+            st.info("Initial memory added to Mem0 (Graph Memory) for this session.")
+    except httpx.HTTPStatusError as e:
+        st.warning(f"Could not add initial memory to Mem0 (Graph Memory): {e.response.text}")
     except Exception as e:
         st.warning(f"Could not add initial memory to Mem0 (Graph Memory): {e}")
+
 
 # --- Dynamic Profile Selection UI in Sidebar ---
 st.sidebar.header("Configure Chatbot Persona")
@@ -92,21 +99,21 @@ st.sidebar.header("Configure Chatbot Persona")
 selected_traits = st.sidebar.multiselect(
     "1. Select Main Character Traits:",
     options=MAIN_CHARACTER_TRAITS,
-    default=st.session_state.selected_traits,
+    default=st.session_state.get('selected_traits', []),
     key="main_traits_selector"
 )
 
 selected_formality = st.sidebar.selectbox(
     "2. Select Formality Level:",
     options=FORMALITY_LEVELS,
-    index=FORMALITY_LEVELS.index(st.session_state.selected_formality),
+    index=FORMALITY_LEVELS.index(st.session_state.get('selected_formality', "Friendly")),
     key="formality_selector"
 )
 
 selected_style = st.sidebar.selectbox(
     "3. Select Communication Style:",
     options=COMMUNICATION_STYLES,
-    index=COMMUNICATION_STYLES.index(st.session_state.selected_style),
+    index=COMMUNICATION_STYLES.index(st.session_state.get('selected_style', "Supportive")),
     key="style_selector"
 )
 
@@ -115,27 +122,41 @@ if st.sidebar.button("Generate Persona"):
         st.sidebar.warning("Please select at least one characteristic or change defaults to generate a persona.")
     else:
         with st.spinner("Generating new persona..."):
-            new_profile = generate_dynamic_profile(selected_traits, selected_formality, selected_style)
-            st.session_state.dynamic_profile = new_profile
-            st.session_state.selected_traits = selected_traits
-            st.session_state.selected_formality = selected_formality
-            st.session_state.selected_style = selected_style
-            st.session_state.messages = []
-            st.session_state.mem0_session_id = str(uuid.uuid4())
-            st.session_state.user_profile_summary = None
-            st.session_state.user_profile_summary_graph = None
-            st.session_state.mood_history_data = None
-            st.session_state.proactive_query_suggestion = None
-            st.session_state.proactive_query_suggestion_vector = None
-            st.session_state.suggested_topic_query = None
             try:
-                mem0_client.add(messages=[
-                    {"role": "assistant", "content": f"Hello! I am now embodying a new persona: {st.session_state.dynamic_profile['description']}"}
-                ], user_id=st.session_state.mem0_session_id)
-                st.info("New persona generated and initial memory added to Mem0 (Graph Memory).")
+                with httpx.Client(timeout=120.0) as client:
+                    response = client.post(f"{FASTAPI_BACKEND_URL}/generate_persona", json={
+                        "traits": selected_traits,
+                        "formality": selected_formality,
+                        "style": selected_style
+                    })
+                    response.raise_for_status()
+                    new_profile = response.json()["dynamic_profile"]
+                
+                st.session_state.dynamic_profile = new_profile
+                st.session_state.selected_traits = selected_traits
+                st.session_state.selected_formality = selected_formality
+                st.session_state.selected_style = selected_style
+                st.session_state.messages = []
+                st.session_state.mem0_session_id = str(uuid.uuid4()) # New session ID for new persona
+                st.session_state.user_profile_summary = None
+                st.session_state.user_profile_summary_graph = None
+                st.session_state.mood_history_data = None
+                st.session_state.proactive_query_suggestion_vector = None
+                st.session_state.proactive_query_suggestion_graph = None
+                # st.session_state.suggested_topic_query = None
+
+                # Add initial memory for the new persona via backend
+                with httpx.Client(timeout=120.0) as client:
+                    response = client.post(f"{FASTAPI_BACKEND_URL}/add_initial_memory", 
+                                           params={"user_id": st.session_state.mem0_session_id, 
+                                                   "description": st.session_state.dynamic_profile['description']})
+                    response.raise_for_status()
+                st.sidebar.success("Persona updated! Conversation reset.")
+                st.rerun() # Rerun to clear chat and apply new persona
+            except httpx.HTTPStatusError as e:
+                st.sidebar.error(f"Error generating persona: {e.response.text}")
             except Exception as e:
-                st.warning(f"Could not add initial memory to Mem0 (Graph Memory) for new persona: {e}")
-            st.sidebar.success("Persona updated! Conversation reset.")
+                st.sidebar.error(f"Error generating persona: {e}")
 
 st.sidebar.markdown("---")
 st.sidebar.subheader("Current Chatbot Persona:")
@@ -145,121 +166,88 @@ st.sidebar.markdown(f"**Selected Traits:** {', '.join(st.session_state.selected_
 st.sidebar.markdown(f"**Formality:** {st.session_state.selected_formality}")
 st.sidebar.markdown(f"**Style:** {st.session_state.selected_style}")
 
-# --- User Personal Profile Section ---
+# --- User Personal Profile Sections ---
 st.sidebar.markdown("---")
-st.sidebar.subheader("User Personal Profile Vector")
+st.sidebar.subheader("User Personal Profiles")
 
 if st.sidebar.button("Show/Update My Vector Profile"):
-    with st.spinner("Fetching and summarizing your profile from memory..."):
+    with st.spinner("Fetching and summarizing your profile from vector memory..."):
         try:
-            profile_filters = {
-                "AND": [
-                    {"user_id": st.session_state.mem0_session_id},
-                    {"OR": [
-                        {"categories": {"contains": "personal_details"}},
-                        {"categories": {"contains": "user_interests"}},
-                        {"categories": {"contains": "user_preferences"}},
-                        {"categories": {"contains": "relationships"}},
-                        {"categories": {"contains": "opinions"}}
-                    ]}
-                ]
-            }
-            personal_memories = mem0_client.get_all(version="v2", filters=profile_filters, page_size=30)
-            
-            st.session_state.user_profile_summary = get_user_personal_profile(personal_memories)
-            st.sidebar.success("User profile updated!")
+            with httpx.Client(timeout=120.0) as client:
+                response = client.post(f"{FASTAPI_BACKEND_URL}/get_user_profile_vector", 
+                                       params={"user_id": st.session_state.mem0_session_id})
+                response.raise_for_status()
+                st.session_state.user_profile_summary = response.json()["profile_summary"]
+            st.sidebar.success("User vector profile updated!")
+        except httpx.HTTPStatusError as e:
+            st.sidebar.error(f"Error fetching/summarizing vector profile: {e.response.text}")
         except Exception as e:
-            st.sidebar.error(f"Error fetching/summarizing profile: {e}")
-            st.session_state.user_profile_summary = None
+            st.sidebar.error(f"Error fetching/summarizing vector profile: {e}")
 
 if st.session_state.user_profile_summary:
     profile = st.session_state.user_profile_summary
-    st.sidebar.markdown(f"**Name:** {profile['name'] if profile['name'] else 'Not found'}")
-    st.sidebar.markdown(f"**Summary:** {profile['summary']}")
+    st.sidebar.markdown(f"**Name (Vector):** {profile['name'] if profile['name'] else 'Not found'}")
+    st.sidebar.markdown(f"**Summary (Vector):** {profile['summary']}")
 else:
-    st.sidebar.info("Click 'Show/Update My Profile' to generate your personal profile based on past conversations.")
+    st.sidebar.info("Click 'Show/Update My Vector Profile' to generate your personal profile based on vector memory.")
 
-
-# --- User Personal Profile Section ---
-st.sidebar.markdown("---")
-st.sidebar.subheader("User Personal Profile Graph")
 
 if st.sidebar.button("Show/Update My Graph Profile"):
-    with st.spinner("Fetching and summarizing your profile from graph..."):
+    with st.spinner("Fetching and summarizing your profile from graph memory..."):
         try:
-            # Calculate date some days ago for filtering
-            # days_ago = datetime.now() - timedelta(days=50)
-            # days_ago_iso = days_ago.isoformat(timespec='seconds') + 'Z' 
-            # filters = {
-            #     "AND": [
-            #         {"user_id": st.session_state.mem0_session_id},
-            #         {"created_at": {"gte": days_ago_iso}},
-            #     ]
-            # }
-            graph_data = graph_mem0_client.get_all(user_id = st.session_state.mem0_session_id)
-            st.session_state.user_profile_summary_graph = get_user_personal_profile_graph(graph_data)
+            with httpx.Client(timeout=120.0) as client:
+                response = client.post(f"{FASTAPI_BACKEND_URL}/get_user_profile_graph", 
+                                       params={"user_id": st.session_state.mem0_session_id})
+                response.raise_for_status()
+                st.session_state.user_profile_summary_graph = response.json()["profile_summary_graph"]
             st.sidebar.success("User graph profile updated!")
+        except httpx.HTTPStatusError as e:
+            st.sidebar.error(f"Error fetching/summarizing graph profile: {e.response.text}")
         except Exception as e:
-            st.sidebar.error(f"Error fetching/summarizing profile: {e}")
-            st.session_state.user_profile_summary_graph = None
+            st.sidebar.error(f"Error fetching/summarizing graph profile: {e}")
 
 if st.session_state.user_profile_summary_graph:
     profile = st.session_state.user_profile_summary_graph
-    st.sidebar.markdown(f"**Name:** {profile['name'] if profile['name'] else 'Not found'}")
-    st.sidebar.markdown(f"**Summary:** {profile['summary']}")
+    st.sidebar.markdown(f"**Name (Graph):** {profile['name'] if profile['name'] else 'Not found'}")
+    st.sidebar.markdown(f"**Summary (Graph):** {profile['summary']}")
 else:
-    st.sidebar.info("Click 'Show/Update My Profile' to generate your personal profile based on user's MemoryGraph.")
+    st.sidebar.info("Click 'Show/Update My Graph Profile' to generate your personal profile based on graph memory.")
     
-    
-# --- Conversation Tools Section ---
-st.sidebar.markdown("---")
-st.sidebar.subheader("Conversation Tools")
 
-if st.sidebar.button("Generate Proactive Query Vector"): # Renamed button
-    with st.spinner("Thinking of a way to re-engage..."):
+if st.sidebar.button("Generate Proactive Query (Vector)"):
+    with st.spinner("Thinking of a proactive query from vector memory..."):
         try:
-            # Calculate date 10 days ago for filtering
-            ten_days_ago = datetime.now() - timedelta(days=10)
-
-            ten_days_ago_iso = ten_days_ago.isoformat(timespec='seconds') + 'Z' 
-            filters = {
-                "AND": [
-                    {"user_id": st.session_state.mem0_session_id},
-                    {"created_at": {"gte": ten_days_ago_iso}},
-                    {"OR": [
-                        {"categories": {"contains": "life_events"}},
-                        {"categories": {"contains": "daily_routine"}}
-                    ]}
-                ]
-            }
-
-            recent_relevant_memories = mem0_client.get_all(version="v2", filters=filters, page_size=15) # limit to 10 for prompt context
-            proactive_query_vector = generate_proactive_query(recent_relevant_memories) # Call the renamed function
-            st.session_state.proactive_query_suggestion_vector = proactive_query_vector # Store in session state
-            st.sidebar.info(f"**Proactive Query Suggestion:** {proactive_query_vector}") # Display the suggestion
+            with httpx.Client(timeout=120.0) as client:
+                response = client.post(f"{FASTAPI_BACKEND_URL}/generate_proactive_query_vector", 
+                                       params={"user_id": st.session_state.mem0_session_id})
+                response.raise_for_status()
+                st.session_state.proactive_query_suggestion_vector = response.json()["proactive_query"]
+            st.sidebar.info(f"**Proactive Query (Vector):** {st.session_state.proactive_query_suggestion_vector}")
+        except httpx.HTTPStatusError as e:
+            st.sidebar.error(f"Error generating proactive query (Vector): {e.response.text}")
         except Exception as e:
-            st.sidebar.error(f"Error generating proactive query: {e}")
-            st.session_state.proactive_query_suggestion_vector = None
+            st.sidebar.error(f"Error generating proactive query (Vector): {e}")
 
-# Display the last proactive query suggestion
-if st.session_state.proactive_query_suggestion:
-    st.sidebar.markdown(f"**Proactive Query Vector:** {st.session_state.proactive_query_suggestion_vector}")
-# --- 2. Generate Proactive Query on personal Graph memory (NEW button) ---
-if st.sidebar.button("Generate Proactive Query (Graph Memory)"): # New button
+if st.session_state.proactive_query_suggestion_vector:
+    st.sidebar.markdown(f"**Last Proactive Query (Vector):** {st.session_state.proactive_query_suggestion_vector}")
+
+if st.sidebar.button("Generate Proactive Query (Graph Memory)"):
     with st.spinner("Thinking of a proactive query from graph memory..."):
         try:
-            graph_data = graph_mem0_client.get_all(user_id = st.session_state.mem0_session_id)
-            proactive_query = generate_proactive_query_graph(graph_data)
-            st.session_state.proactive_query_suggestion = proactive_query
-            st.sidebar.info(f"**Proactive Query (Graph Memory):** {proactive_query}")
+            with httpx.Client(timeout=120.0) as client:
+                response = client.post(f"{FASTAPI_BACKEND_URL}/generate_proactive_query_graph", 
+                                       params={"user_id": st.session_state.mem0_session_id})
+                response.raise_for_status()
+                st.session_state.proactive_query_suggestion_graph = response.json()["proactive_query"]
+            st.sidebar.info(f"**Proactive Query (Graph Memory):** {st.session_state.proactive_query_suggestion_graph}")
+        except httpx.HTTPStatusError as e:
+            st.sidebar.error(f"Error generating proactive query (Graph): {e.response.text}")
         except Exception as e:
-            st.sidebar.error(f"Error generating proactive query from graph memory: {e}")
-            st.session_state.proactive_query_suggestion = None
+            st.sidebar.error(f"Error generating proactive query (Graph): {e}")
 
-# Display the last proactive query suggestion
-if st.session_state.proactive_query_suggestion:
-    st.sidebar.markdown(f"**Proactive Query Vector:** {st.session_state.proactive_query_suggestion_vector}")
-    st.sidebar.markdown(f"**Proactive Query Graph:** {st.session_state.proactive_query_suggestion}")
+if st.session_state.proactive_query_suggestion_graph:
+    st.sidebar.markdown(f"**Last Proactive Query (Graph):** {st.session_state.proactive_query_suggestion_graph}")
+
 
 # --- Mood History Section ---
 st.sidebar.markdown("---")
@@ -268,68 +256,26 @@ st.sidebar.subheader("User Mood History")
 if st.sidebar.button("Show Mood History"):
     with st.spinner("Fetching and processing mood history..."):
         try:
-            month_ago = datetime.now() - timedelta(days=30)
-
-            month_ago_iso = month_ago.isoformat(timespec='seconds') + 'Z' 
-            filters = {
-                "AND": [
-                    {"user_id": st.session_state.mem0_session_id},
-                    {"created_at": {"gte": month_ago_iso}},
-                    {"categories": {"contains": "user_mood"}}
-                ]
-            }
-
-            all_mood_memories = mem0_client.get_all(version="v2", filters=filters, page_size=50)
-            # --- NEW: Use mood_llm to parse the mood from memory text ---
-            mood_data_for_chart = []
-            for memory in all_mood_memories:
-                mood_text = memory.get('memory', '')
-                detected_mood = "neutral" # Default if parsing fails
-
-                if mood_text: # Only attempt to parse if there's text
-                    try:
-                        # Invoke mood_llm to parse the structured mood
-                        parsed_mood_raw = mood_llm.invoke(mood_text)
-                        
-                        # Robustly extract Pydantic model and convert to dict
-                        parsed_mood_data = {}
-                        if isinstance(parsed_mood_raw, dict) and 'parsed' in parsed_mood_raw and isinstance(parsed_mood_raw['parsed'], BaseModel):
-                            parsed_mood_data = parsed_mood_raw['parsed'].model_dump()
-                        elif isinstance(parsed_mood_raw, BaseModel):
-                            parsed_mood_data = parsed_mood_raw.model_dump()
-                        
-                        if parsed_mood_data and 'mood' in parsed_mood_data:
-                            detected_mood = parsed_mood_data['mood'].lower()
-                            # You could also use intensity if you want to refine score, e.g.,
-                            # if parsed_mood_data.get('intensity') == 'high': score += 0.5
-                            
-                    except Exception as parse_e:
-                        st.warning(f"Could not parse mood from memory '{mood_text}': {parse_e}. Defaulting to neutral.")
-                        detected_mood = "neutral" # Fallback on parsing error
-
-                created_at_iso = memory.get('created_at')
-                if created_at_iso:
-                    timestamp = datetime.fromisoformat(created_at_iso.split('.')[0]).replace(tzinfo=None)
-                else:
-                    timestamp = datetime.now()
-                
-                mood_data_for_chart.append({
-                    "time": timestamp,
-                    "mood": detected_mood,
-                    "mood_score": MOOD_SCORE_MAP.get(detected_mood, 3)
-                })
+            with httpx.Client(timeout=120.0) as client:
+                response = client.post(f"{FASTAPI_BACKEND_URL}/get_mood_history", 
+                                       params={"user_id": st.session_state.mem0_session_id})
+                response.raise_for_status()
+                mood_history_data_raw = response.json()["mood_history_data"]
             
-            if mood_data_for_chart:
-                df_mood_history = pd.DataFrame(mood_data_for_chart).sort_values(by="time")
+            if mood_history_data_raw:
+                df_mood_history = pd.DataFrame(mood_history_data_raw)
+                df_mood_history['time'] = pd.to_datetime(df_mood_history['time'])
+                df_mood_history = df_mood_history.sort_values(by="time")
                 st.session_state.mood_history_data = df_mood_history
                 st.sidebar.success("Mood history fetched!")
             else:
                 st.session_state.mood_history_data = None
                 st.sidebar.info("No mood history found yet. Chat more to generate data!")
 
+        except httpx.HTTPStatusError as e:
+            st.sidebar.error(f"Error fetching mood history: {e.response.text}")
         except Exception as e:
             st.sidebar.error(f"Error fetching mood history: {e}")
-            st.session_state.mood_history_data = None
 
 if st.session_state.mood_history_data is not None and not st.session_state.mood_history_data.empty:
     st.sidebar.markdown("#### Mood Dynamics Over Time")
@@ -349,97 +295,63 @@ else:
         st.sidebar.info("Chat with the bot, and your mood will be analyzed on each turn. Then click 'Show Mood History' to see the trend.")
 
 # --- Display Chat History (from Streamlit session state) ---
+# This loop displays ALL messages currently in st.session_state.messages
 for message in st.session_state.messages:
-    with st.chat_message(message["role"]):
-        st.markdown(message["content"])
+    st.chat_message(message.role).markdown(message.content)
 
 # --- Chat Input and Logic ---
 prompt = st.chat_input("Type your message here...")
 
 if prompt:
-    controversial_analysis_result = detect_controversial_topic(prompt)
-    
-    if controversial_analysis_result.get('is_controversial'):
-        category = controversial_analysis_result.get('category', 'undefined')
-        reason = controversial_analysis_result.get('reason', 'due to its content.')
-        
-        st.session_state.messages.append({"role": "user", "content": prompt})
-        with st.chat_message("user"):
-            st.markdown(prompt)
-        
-        refusal_message = f"I cannot discuss topics related to **{category}**, {reason}. Please let's move on to another topic."
-        st.session_state.messages.append({"role": "assistant", "content": refusal_message})
-        with st.chat_message("assistant"):
-            st.markdown(refusal_message)
-        
-        try:
-            mem0_client.add(messages=[{"role": "assistant", "content": f"Refused to discuss controversial topic: {category} for user message: '{prompt}'"}],
-                            user_id=st.session_state.mem0_session_id,
-                            categories=["chatbot_interactions"])
-        except Exception as add_refusal_e:
-            st.warning(f"Could not add refusal memory to Mem0 (Graph Memory): {add_refusal_e}")
-        
-        st.stop()
-
-    st.session_state.messages.append({"role": "user", "content": prompt})
+    # Add user's message to Streamlit's session state immediately for display
+    st.session_state.messages.append(Message(role="user", content=prompt))
+    # Display the user's message immediately in the chat UI
     with st.chat_message("user"):
         st.markdown(prompt)
 
+    # Prepare request payload for FastAPI chat endpoint
+    chat_payload = {
+        "user_id": st.session_state.mem0_session_id,
+        "prompt": prompt,
+        # Send the *entire current* messages list to the backend for context
+        "messages": [{"role": m.role, "content": m.content} for m in st.session_state.messages], 
+        "selected_traits": st.session_state.selected_traits,
+        "selected_formality": st.session_state.selected_formality,
+        "selected_style": st.session_state.selected_style,
+        "dynamic_profile": st.session_state.dynamic_profile
+    }
+
     try:
-        mem0_client.add(messages=[{"role": "user", "content": prompt}], user_id=st.session_state.mem0_session_id)
-
-    except Exception as e:
-        st.warning(f"Could not add user message to Mem0 (Cloud Vector Database): {e}")
-
-    try:
-        # formatted_message = f"As user {st.session_state.mem0_session_id}, I share: {prompt}"
-        graph_mem0_client.add(prompt, user_id=st.session_state.mem0_session_id)
-    except Exception as e:
-        st.warning(f"Could not add user message to Mem0 (Graph Memory): {e}")
-
-
-
-    relevant_memories_str = "No relevant memories found."
-    try:
-        search_results = mem0_client.search(query=prompt, user_id=st.session_state.mem0_session_id, limit=3)
-        if search_results:
-            relevant_memories_str = "\n".join([f"- {m['memory']}" for m in search_results])
+        with httpx.Client(timeout=180.0) as client:
+            response = client.post(f"{FASTAPI_BACKEND_URL}/chat", json=chat_payload)
+            response.raise_for_status()
+            chat_response_data = response.json()
+        
+        # Update Streamlit session state with response from backend
+        # The backend returns the *updated* messages list (including bot's response)
+        st.session_state.messages = [Message(role=msg['role'], content=msg['content']) for msg in chat_response_data["messages"]]
+        
+        # Update mood and intent from backend response
+        st.session_state.current_mood = chat_response_data.get("user_mood_str")
+        st.session_state.current_intent = chat_response_data.get("user_intent_str")
+        
+        # Display relevant memories and user analysis in sidebar (from backend response)
+        if chat_response_data.get("relevant_memories_str") and chat_response_data["relevant_memories_str"] != "No relevant memories found.":
             st.sidebar.subheader("Mem0 Search Results:")
-            for i, memory in enumerate(search_results):
-                st.sidebar.markdown(f"**{i+1}.** {memory['memory']}")
+            st.sidebar.markdown(chat_response_data["relevant_memories_str"])
         else:
             st.sidebar.subheader("Mem0 Search Results:")
             st.sidebar.info("No relevant memories found in Mem0 for this query.")
+
+        # # Display User Analysis section in sidebar
+        # st.sidebar.subheader("User Analysis:")
+        # st.sidebar.markdown(f"**Mood:** {st.session_state.current_mood}")
+        # st.sidebar.markdown(f"**Intent:** {st.session_state.current_intent}")
+
+
+        st.rerun() # Rerun Streamlit to update chat history and sidebar
+    except httpx.HTTPStatusError as e:
+        st.error(f"Chat error: {e.response.text}")
     except Exception as e:
-        st.warning(f"Could not perform Mem0 search: {e}. Proceeding without additional memories.")
-
-
-    with st.chat_message("assistant"):
-        with st.spinner(f"Thinking as a dynamically generated persona..."):
-            profile_desc = st.session_state.dynamic_profile['description']
-            profile_traits = st.session_state.dynamic_profile['behavioral_traits']
-
-            system_prompt_template = get_system_prompt_template()
-
-            system_message_content = system_prompt_template.format(
-                persona_name="Dynamically Generated Persona",
-                profile_description=profile_desc,
-                profile_behavioral_traits=profile_traits,
-                relevant_memories=relevant_memories_str,
-            )
-
-            messages = [
-                SystemMessage(content=system_message_content)
-            ]
-
-            for msg in st.session_state.messages:
-                if msg["role"] == "user":
-                    messages.append(HumanMessage(content=msg["content"]))
-                elif msg["role"] == "assistant":
-                    messages.append(AIMessage(content=msg["content"]))
-
-            ai_response = llm.invoke(messages)
-            st.markdown(ai_response.content)
-
-            st.session_state.messages.append({"role": "assistant", "content": ai_response.content})
+        st.error(f"An unexpected error occurred during chat: {e}")
 

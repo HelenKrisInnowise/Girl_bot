@@ -1,22 +1,34 @@
-
 import os
 from dotenv import load_dotenv
-from mem0 import MemoryClient
-from mem0 import Memory 
-load_dotenv() 
+from mem0 import AsyncMemory 
+from mem0.configs.base import MemoryConfig
+from mem0 import AsyncMemoryClient
+import asyncio
 
+load_dotenv()
+os.environ["MEM0_API_KEY"] = os.getenv("MEM0_API_KEY")
 os.environ["OPENAI_API_KEY"] = os.getenv("OPENAI_API_KEY")
 
+# --- Get all necessary environment variables ---
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+MEM0_API_KEY = os.getenv("MEM0_API_KEY") # Ensure MEM0_API_KEY is loaded for mem0 cloud vector store
 NEO4J_URI = os.getenv("NEO4J_URI")
-NEO4J_USERNAME = os.getenv("NEO4J_USERNAME")
+NEO4J_USER = os.getenv("NEO4J_USER")
 NEO4J_PASSWORD = os.getenv("NEO4J_PASSWORD")
 NEO4J_DATABASE = os.getenv("NEO4J_DATABASE")
+OPENAI_EMBEDDING_MODEL_DEPLOYMENT_NAME = os.getenv("OPENAI_EMBEDDING_MODEL_DEPLOYMENT_NAME") # For explicit embedder config
 
-
-
-if not all([NEO4J_URI, NEO4J_USERNAME, NEO4J_PASSWORD]):
+# Basic validation for critical keys
+if not OPENAI_API_KEY:
+    raise ValueError("OPENAI_API_KEY is not set in .env. Please provide your OpenAI API key.")
+if not MEM0_API_KEY:
+    raise ValueError("MEM0_API_KEY is not set in .env. Please provide your Mem0 Cloud API key.")
+if not all([NEO4J_URI, NEO4J_USER, NEO4J_PASSWORD]):
     raise ValueError("Neo4j environment variables (NEO4J_URI, NEO4J_USER, NEO4J_PASSWORD) are not set. Graph Memory cannot be initialized.")
+if not OPENAI_EMBEDDING_MODEL_DEPLOYMENT_NAME:
+    # Fallback for embedding model if not explicitly set, but warn
+    print("Warning: OPENAI_EMBEDDING_MODEL_DEPLOYMENT_NAME not set. Defaulting to 'text-embedding-3-small'.")
+    OPENAI_EMBEDDING_MODEL_DEPLOYMENT_NAME = "text-embedding-3-small"
 
 # Define custom categories for Mem0
 MEM0_CUSTOM_CATEGORIES = [
@@ -101,7 +113,19 @@ Additional General Rules:
 
 """
 
-mem0_full_config = {
+# --- Mem0 Configuration for the Cloud Vector Store (mem0_client) ---
+mem0_cloud_config = {
+    "llm": {
+        "provider": "openai",
+        "config": {
+            "api_key": OPENAI_API_KEY,
+            "model": "gpt-4"
+        }
+    },
+}
+
+# --- Mem0 Configuration for the Graph Store (graph_mem0_client) ---
+mem0_graph_config = {
     "graph_store": {
         "provider": "neo4j",
         "config": {
@@ -116,42 +140,28 @@ mem0_full_config = {
     },
     "version": "v1.1"
 }
-# Initialize Mem0 with the full configuration
-try:
-    graph_mem0_client = Memory.from_config(config_dict=mem0_full_config)
-except Exception as e:
-    raise RuntimeError(f"Failed to initialize Mem0 client: {e}. Check MEM0_API_KEY, Neo4j, and OpenAI LLM configs.")
+# Initialize MemoryConfig with your custom config
+custom_config = MemoryConfig(config=mem0_graph_config)
+
+mem0_client = None
+graph_mem0_client = None
 
 
-
-# Configuration for Mem0's internal LLM to use Azure OpenAI
-mem0_config = {
-    "llm": {
-        "provider": "openai",
-        "config": {
-            "api_key": OPENAI_API_KEY,
-            "model": "gpt-4"
-        }
-    },
-}
-
-# Initialize Mem0 client (without custom categories/instructions in constructor)
-try:
-    mem0_client = MemoryClient(api_key=os.getenv("MEM0_API_KEY"))
-    
-    # Set custom categories and instructions at the project level AFTER initialization
+def initialize_mem0_clients():
+    global mem0_client, graph_mem0_client # Declare global to modify them
     try:
+        mem0_client = AsyncMemoryClient(api_key=os.getenv("MEM0_API_KEY"))
+        graph_mem0_client = AsyncMemory(config=custom_config)
         mem0_client.update_project(
             custom_categories=MEM0_CUSTOM_CATEGORIES,
             custom_instructions=MEM0_CUSTOM_INSTRUCTIONS
         )
-        print("Mem0 project updated with custom categories and instructions.")
-    except Exception as update_e:
-        # Catch errors during update_project, but allow client init to succeed if possible
-        print(f"Warning: Could not update Mem0 project settings: {update_e}")
-        print("Ensure your API key has project write permissions.")
-        pass # Do not re-raise, allow the app to continue without custom settings if update fails
+        print("Mem0 (Vector) project updated with custom categories and instructions.")
 
+    except Exception as e:
+        print(f"Failed to initialize Mem0 clients: {e}. Check OpenAI API Key, Mem0 API Key, Neo4j configs.")
+        # Re-raise the exception to indicate a critical startup failure
+        raise
+    return mem0_client, graph_mem0_client 
 
-except Exception as e:
-    raise RuntimeError(f"Failed to initialize Mem0 client: {e}. Check MEM0_API_KEY and Azure OpenAI LLM configs.")
+mem0_client, graph_mem0_client = initialize_mem0_clients()

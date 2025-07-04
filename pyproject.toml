@@ -12,7 +12,11 @@ dependencies = [
     "langchain-community",
     "streamlit",
     "pydantic",
-    "python-dotenv",   
+    "python-dotenv",  
+    "fastapi",
+    "uvicorn",
+    "httpx",
+    "python-multipart"
     ]
 
 [tool.uv]
