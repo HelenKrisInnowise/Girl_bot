@@ -70,14 +70,13 @@ if "mem0_session_id" not in st.session_state:
         "description": "A versatile chatbot waiting for your personality settings.",
         "behavioral_traits": "The chatbot will be neutral until specific traits are selected."
     }
-    # st.session_state.current_mood = "Not detected." # Initialize with string
-    # st.session_state.current_intent = "Not detected." # Initialize with string
+
     st.session_state.user_profile_summary = None
     st.session_state.user_profile_summary_graph = None
     st.session_state.mood_history_data = None
     st.session_state.proactive_query_suggestion_vector = None # Separate for vector proactive query
     st.session_state.proactive_query_suggestion_graph = None # Separate for graph proactive query
-    # st.session_state.suggested_topic_query = None
+
 
     # Call backend to add initial memory
     try:
@@ -192,28 +191,6 @@ else:
     st.sidebar.info("Click 'Show/Update My Vector Profile' to generate your personal profile based on vector memory.")
 
 
-if st.sidebar.button("Show/Update My Graph Profile"):
-    with st.spinner("Fetching and summarizing your profile from graph memory..."):
-        try:
-            with httpx.Client(timeout=120.0) as client:
-                response = client.post(f"{FASTAPI_BACKEND_URL}/get_user_profile_graph", 
-                                       params={"user_id": st.session_state.mem0_session_id})
-                response.raise_for_status()
-                st.session_state.user_profile_summary_graph = response.json()["profile_summary_graph"]
-            st.sidebar.success("User graph profile updated!")
-        except httpx.HTTPStatusError as e:
-            st.sidebar.error(f"Error fetching/summarizing graph profile: {e.response.text}")
-        except Exception as e:
-            st.sidebar.error(f"Error fetching/summarizing graph profile: {e}")
-
-if st.session_state.user_profile_summary_graph:
-    profile = st.session_state.user_profile_summary_graph
-    st.sidebar.markdown(f"**Name (Graph):** {profile['name'] if profile['name'] else 'Not found'}")
-    st.sidebar.markdown(f"**Summary (Graph):** {profile['summary']}")
-else:
-    st.sidebar.info("Click 'Show/Update My Graph Profile' to generate your personal profile based on graph memory.")
-    
-
 if st.sidebar.button("Generate Proactive Query (Vector)"):
     with st.spinner("Thinking of a proactive query from vector memory..."):
         try:
@@ -227,27 +204,6 @@ if st.sidebar.button("Generate Proactive Query (Vector)"):
             st.sidebar.error(f"Error generating proactive query (Vector): {e.response.text}")
         except Exception as e:
             st.sidebar.error(f"Error generating proactive query (Vector): {e}")
-
-if st.session_state.proactive_query_suggestion_vector:
-    st.sidebar.markdown(f"**Last Proactive Query (Vector):** {st.session_state.proactive_query_suggestion_vector}")
-
-if st.sidebar.button("Generate Proactive Query (Graph Memory)"):
-    with st.spinner("Thinking of a proactive query from graph memory..."):
-        try:
-            with httpx.Client(timeout=120.0) as client:
-                response = client.post(f"{FASTAPI_BACKEND_URL}/generate_proactive_query_graph", 
-                                       params={"user_id": st.session_state.mem0_session_id})
-                response.raise_for_status()
-                st.session_state.proactive_query_suggestion_graph = response.json()["proactive_query"]
-            st.sidebar.info(f"**Proactive Query (Graph Memory):** {st.session_state.proactive_query_suggestion_graph}")
-        except httpx.HTTPStatusError as e:
-            st.sidebar.error(f"Error generating proactive query (Graph): {e.response.text}")
-        except Exception as e:
-            st.sidebar.error(f"Error generating proactive query (Graph): {e}")
-
-if st.session_state.proactive_query_suggestion_graph:
-    st.sidebar.markdown(f"**Last Proactive Query (Graph):** {st.session_state.proactive_query_suggestion_graph}")
-
 
 # --- Mood History Section ---
 st.sidebar.markdown("---")
@@ -342,11 +298,6 @@ if prompt:
         else:
             st.sidebar.subheader("Mem0 Search Results:")
             st.sidebar.info("No relevant memories found in Mem0 for this query.")
-
-        # # Display User Analysis section in sidebar
-        # st.sidebar.subheader("User Analysis:")
-        # st.sidebar.markdown(f"**Mood:** {st.session_state.current_mood}")
-        # st.sidebar.markdown(f"**Intent:** {st.session_state.current_intent}")
 
 
         st.rerun() # Rerun Streamlit to update chat history and sidebar

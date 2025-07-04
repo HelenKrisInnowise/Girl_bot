@@ -12,10 +12,6 @@ os.environ["OPENAI_API_KEY"] = os.getenv("OPENAI_API_KEY")
 # --- Get all necessary environment variables ---
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 MEM0_API_KEY = os.getenv("MEM0_API_KEY") # Ensure MEM0_API_KEY is loaded for mem0 cloud vector store
-NEO4J_URI = os.getenv("NEO4J_URI")
-NEO4J_USER = os.getenv("NEO4J_USER")
-NEO4J_PASSWORD = os.getenv("NEO4J_PASSWORD")
-NEO4J_DATABASE = os.getenv("NEO4J_DATABASE")
 OPENAI_EMBEDDING_MODEL_DEPLOYMENT_NAME = os.getenv("OPENAI_EMBEDDING_MODEL_DEPLOYMENT_NAME") # For explicit embedder config
 
 # Basic validation for critical keys
@@ -23,8 +19,6 @@ if not OPENAI_API_KEY:
     raise ValueError("OPENAI_API_KEY is not set in .env. Please provide your OpenAI API key.")
 if not MEM0_API_KEY:
     raise ValueError("MEM0_API_KEY is not set in .env. Please provide your Mem0 Cloud API key.")
-if not all([NEO4J_URI, NEO4J_USER, NEO4J_PASSWORD]):
-    raise ValueError("Neo4j environment variables (NEO4J_URI, NEO4J_USER, NEO4J_PASSWORD) are not set. Graph Memory cannot be initialized.")
 if not OPENAI_EMBEDDING_MODEL_DEPLOYMENT_NAME:
     # Fallback for embedding model if not explicitly set, but warn
     print("Warning: OPENAI_EMBEDDING_MODEL_DEPLOYMENT_NAME not set. Defaulting to 'text-embedding-3-small'.")
@@ -124,54 +118,15 @@ mem0_cloud_config = {
     },
 }
 
-# --- Mem0 Configuration for the Graph Store (graph_mem0_client) ---
-mem0_graph_config = {
-    "graph_store": {
-        "provider": "neo4j",
-        "config": {
-            "url": os.getenv("NEO4J_URI", "bolt://neo4j:7687"),  # Fallback to default if not set
-            "username": os.getenv("NEO4J_USER", "neo4j"),  # Default user is 'neo4j'
-            "password": os.getenv("NEO4J_PASSWORD"),  # Required, no default
-            "database": os.getenv("NEO4J_DATABASE", "neo4j"),  # Fallback to default DB
-        }
-    },
-    "embedding": {
-        "model": "text-embedding-3-small"
-    },
-    "version": "v1.1"
-}
-# Initialize MemoryConfig with your custom config
-custom_config = MemoryConfig(config=mem0_graph_config)
-
 mem0_client = None
-graph_mem0_client = None
 
-
-# def initialize_mem0_clients():
-#     global mem0_client, graph_mem0_client # Declare global to modify them
-#     try:
-#         mem0_client = AsyncMemoryClient(api_key=os.getenv("MEM0_API_KEY"))
-#         graph_mem0_client = AsyncMemory(config=custom_config)
-#         mem0_client.update_project(
-#             custom_categories=MEM0_CUSTOM_CATEGORIES,
-#             custom_instructions=MEM0_CUSTOM_INSTRUCTIONS
-#         )
-#         print("Mem0 (Vector) project updated with custom categories and instructions.")
-
-#     except Exception as e:
-#         print(f"Failed to initialize Mem0 clients: {e}. Check OpenAI API Key, Mem0 API Key, Neo4j configs.")
-#         # Re-raise the exception to indicate a critical startup failure
-#         raise
-#     return mem0_client, graph_mem0_client 
-
-# mem0_client, graph_mem0_client = initialize_mem0_clients()
 async def create_mem0_clients():
     """Factory function to create and initialize clients"""
     mem0_client = AsyncMemoryClient(api_key=os.getenv("MEM0_API_KEY"))
-    graph_mem0_client = AsyncMemory(config=custom_config)
+ 
     
     await mem0_client.update_project(
         custom_categories=MEM0_CUSTOM_CATEGORIES,
         custom_instructions=MEM0_CUSTOM_INSTRUCTIONS
     )
-    return mem0_client, graph_mem0_client
+    return mem0_client

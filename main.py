@@ -5,14 +5,14 @@ from typing import List, Optional, Dict, Any, Annotated
 import asyncio
 import uuid
 from datetime import datetime, timedelta
-from fastapi import Depends  # For dependency injection
-from mem0 import AsyncMemoryClient, AsyncMemory  # Import your Mem0 client types
+from fastapi import Depends 
+from mem0 import AsyncMemoryClient
 
 # Import client factory instead of direct clients
 from modules.mem0_config import create_mem0_clients
+
 from modules.llm_setup import (
-    generate_dynamic_profile, get_user_personal_profile, get_user_personal_profile_graph,
-    generate_proactive_query, generate_proactive_query_graph,
+    generate_dynamic_profile, get_user_personal_profile,generate_proactive_query, 
     detect_controversial_topic, get_system_prompt_template, llm, mood_llm
 )
 from modules.profiles import MAIN_CHARACTER_TRAITS, FORMALITY_LEVELS, COMMUNICATION_STYLES
@@ -24,18 +24,15 @@ from pydantic import BaseModel as PydanticBaseModel
 async def lifespan(app: FastAPI):
     # Initialize and store clients
     print("FastAPI startup: Initializing Mem0 clients...")
-    app.state.mem0_client, app.state.graph_mem0_client = await create_mem0_clients()
+    app.state.mem0_client = await create_mem0_clients()
     print("FastAPI startup: Mem0 clients initialized.")
     yield
     # Cleanup code could go here if needed
 
-app = FastAPI(title="Girls Chatbot Backend", lifespan=lifespan)
+app = FastAPI(title="Girls Chatbot", lifespan=lifespan)
 
 async def get_mem0_client(request: Request) -> AsyncMemoryClient:
     return request.app.state.mem0_client
-
-async def get_graph_client(request: Request) -> AsyncMemory:
-    return request.app.state.graph_mem0_client
 
 # --- Pydantic Models ---
 class Message(BaseModel):
@@ -100,7 +97,7 @@ async def add_initial_memory_endpoint(
 async def chat_endpoint(
     request: ChatRequest,
     mem0_client: AsyncMemoryClient = Depends(get_mem0_client),
-    graph_mem0_client: AsyncMemory = Depends(get_graph_client)
+    # graph_mem0_client: AsyncMemory = Depends(get_graph_client)
 ):
     try:
         # Controversial topic detection
@@ -130,7 +127,7 @@ async def chat_endpoint(
             messages=[{"role": "user", "content": request.prompt}],
             user_id=request.user_id
         )
-        await graph_mem0_client.add(request.prompt, user_id=request.user_id)
+
 
         # Get relevant memories
         relevant_memories_str = "No relevant memories found."
@@ -189,20 +186,6 @@ async def get_user_profile_vector_endpoint(
             detail=f"Error fetching/summarizing vector profile: {str(e)}"
         )
 
-@app.post("/get_user_profile_graph")
-async def get_user_profile_graph_endpoint(
-    user_id: str,
-    graph_mem0_client: AsyncMemory = Depends(get_graph_client)
-):
-    try:
-        profile_summary = await get_user_personal_profile_graph(graph_mem0_client, user_id)
-        return {"profile_summary_graph": profile_summary}
-    except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Error fetching/summarizing graph profile: {str(e)}"
-        )
-
 @app.post("/generate_proactive_query_vector")
 async def generate_proactive_query_vector_endpoint(
     user_id: str,
@@ -215,20 +198,6 @@ async def generate_proactive_query_vector_endpoint(
         raise HTTPException(
             status_code=500,
             detail=f"Error generating proactive query (Vector): {str(e)}"
-        )
-
-@app.post("/generate_proactive_query_graph")
-async def generate_proactive_query_graph_endpoint(
-    user_id: str,
-    graph_mem0_client: AsyncMemory = Depends(get_graph_client)
-):
-    try:
-        proactive_query = await generate_proactive_query_graph(graph_mem0_client, user_id)
-        return {"proactive_query": proactive_query}
-    except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Error generating proactive query (Graph): {str(e)}"
         )
 
 @app.post("/get_mood_history")
