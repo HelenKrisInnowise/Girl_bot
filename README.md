@@ -1,15 +1,15 @@
 
 # Girls Chatbot Demo
 
-This project presents a Streamlit-based chatbot demonstration application that leverages advanced Mem0 memory features (with a Neo4j graph database and Mem0 Cloud vector database database), and an OpenAI LLM for dynamic persona configuration, mood analysis, and proactive interaction.
+This project presents a Streamlit-based chatbot demonstration application that leverages advanced Mem0 memory features (with Mem0 Cloud vector database database), and an OpenAI LLM for dynamic persona configuration, mood analysis, and proactive interaction.
 
 ## Project Features
 
 - **Dynamic Persona Generation:** Configure the chatbot's personality via the sidebar by selecting core character traits, formality levels, and communication styles.
 - **Mood and Intent Analysis:** The bot analyzes your messages to determine your mood and intentions, adapting its responses for a more empathetic interaction.
-- **Hybrid Mem0 Memory:** Utilizes both a local Neo4j graph database (running in Docker) for structured relationships like personal connections and events, and Mem0 Cloud vector database (for semantic search and general memory storage).
+- **Hybrid Mem0 Memory:** Utilizes  Mem0 Cloud vector database (for semantic search and general memory storage).
 - **User Profile:** Dynamically generated summary of the user's profile based on stored memories.
-- **Proactive Queries:** Two functions for re-engaging in conversation:
+- **Proactive Queries:** A function for re-engaging in conversation:
 - **Mood Change History:** Visualization of the user's mood dynamics over time.
 - **Content Moderation:** Filtering of controversial topics and potentially undesirable content.
 
@@ -37,7 +37,7 @@ To run this project, you will need:
 ### 1. Clone the repository
 
 ```bash
-git clone --branch feature/Async_Vector_Streaming --single-branch https://github.com/HelenKrisInnowise/Girl_bot.git
+git clone --branch feature/Async_Vector_CloudMem0 --single-branch https://github.com/HelenKrisInnowise/Girl_bot.git
 
 cd Girl_bot
 ```
@@ -67,12 +67,12 @@ docker compose up --build
 This command will:
 
 - Build the Docker images (if not already built or if there are changes).
-- Start all services defined in `docker-compose.yml` (your application, local Qdrant).
+- Start all services defined in `docker-compose.yml` (your application).
 
 
 ### 4. Access the application
 
-After all services have started (this may take a few minutes, especially during the first launch of Qdrant), your Streamlit application will be accessible at:
+After all services have started (this may take a few minutes), your Streamlit application will be accessible at:
 
 [http://localhost:8501](http://localhost:8501)
 
@@ -95,13 +95,6 @@ If you plan to actively develop or debug the application outside of Docker, it i
 ```bash
 pip install -e .
 ```
-
-### Database Inspection
-
-- **Qdrant UI:**  
-  If you are using Qdrant and expose its UI port (usually `6333` or `6334`), you can also access it locally.
-
----
 
 This updated `README.md` now clearly explains how to set up and run the application with a local Neo4j instance managed by Docker Compose.
 ```
