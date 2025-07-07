@@ -5,7 +5,7 @@ services:
   backend:
     build:
       context: .
-      dockerfile: Dockerfile.backend # Use a specific Dockerfile for the backend
+      dockerfile: Dockerfile.backend 
     container_name: fastapi-backend
     ports:
       - "8000:8000"
@@ -13,21 +13,20 @@ services:
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - MEM0_API_KEY=${MEM0_API_KEY}
       - FASTAPI_ENV=production
-    # Removed Neo4j dependency. Qdrant dependency also removed as it's not defined as a service.
-    command: uvicorn main:app --host 0.0.0.0 --port 8000 # Adjusted path for main.py
+    command: uvicorn main:app --host 0.0.0.0 --port 8000 
     restart: unless-stopped
 
   # Streamlit Frontend
   app:
     build:
       context: .
-      dockerfile: Dockerfile.app # Use a specific Dockerfile for the Streamlit app
+      dockerfile: Dockerfile.app 
     container_name: streamlit-app
     ports:
       - "8501:8501"
     environment:
-      - BACKEND_URL=http://backend:8000 # Connects to the backend service
+      - BACKEND_URL=http://backend:8000 
     depends_on:
-      - backend # Ensures backend starts before the app
-    command: streamlit run app.py --server.port 8501 --server.address 0.0.0.0 # Ensures Streamlit listens on all interfaces
+      - backend 
+    command: streamlit run app.py --server.port 8501 --server.address 0.0.0.0 
     restart: unless-stopped

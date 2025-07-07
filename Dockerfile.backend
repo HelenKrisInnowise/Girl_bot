@@ -1,46 +1,30 @@
 FROM python:3.11-slim-buster as builder
 
-# Install uv (ultra-fast pip replacement)
 RUN pip install --no-cache-dir uv
 
-# Set working directory inside the container
 WORKDIR /app
 
-# First copy dependency files
-# Assuming pyproject.toml and uv.lock are in the root context
 COPY pyproject.toml .
 COPY uv.lock .
 
-# Install dependencies with uv (system-wide)
 RUN uv pip install --system -e .
 
-# --- Production stage ---
 FROM python:3.11-slim-buster
 
-# Install runtime dependencies
-# libgomp1 is often needed for some Python packages (e.g., numpy, scipy)
 RUN apt-get update && \
     apt-get install -y --no-install-recommends libgomp1 && \
     rm -rf /var/lib/apt/lists/*
 
-# Copy installed packages from builder stage
 COPY --from=builder /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
 COPY --from=builder /usr/local/bin /usr/local/bin
 
-# Set working directory for the application
 WORKDIR /app
 
-# Copy application code from the host to the container
-# This will copy main.py, app.py, and the 'modules' folder from your root context
 COPY . .
 
-# Expose FastAPI port
 EXPOSE 8000
 
-# Health check for the FastAPI application
 HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \
     CMD curl -f http://localhost:8000/health || exit 1
 
-# Command to run the FastAPI application
-# 'main:app' assumes your FastAPI application instance is named 'app' in 'main.py'
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "4"]
