@@ -16,7 +16,7 @@ class Message(BaseModel):
 
 load_dotenv()
 
-FASTAPI_BACKEND_URL = os.getenv("FASTAPI_BACKEND_URL", "http://localhost:8000")
+FASTAPI_BACKEND_URL = os.getenv("BACKEND_URL", os.getenv("FASTAPI_BACKEND_URL", "http://localhost:8000"))
 
 # Basic check for essential environment variables
 if not all([os.getenv("OPENAI_API_KEY"), os.getenv("MEM0_API_KEY")]):
