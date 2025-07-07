@@ -1,14 +1,13 @@
 import streamlit as st
 import uuid
 import os
-from dotenv import load_dotenv
 import pandas as pd
 import altair as alt
-from datetime import datetime, timedelta
 import httpx 
 import json
 from pydantic import BaseModel 
-from typing import Literal
+from dotenv import load_dotenv
+
 from modules.profiles import MAIN_CHARACTER_TRAITS, FORMALITY_LEVELS, COMMUNICATION_STYLES
 
 class Message(BaseModel):
@@ -25,7 +24,7 @@ if not all([os.getenv("OPENAI_API_KEY"), os.getenv("MEM0_API_KEY")]):
     st.stop()
 
 # --- Streamlit UI Setup ---
-st.set_page_config(page_title="Girls Chatbot Demo (FastAPI Backend)", layout="centered")
+st.set_page_config(page_title="Girls Chatbot Demo", layout="centered")
 st.markdown(
     """
     <style>
@@ -53,7 +52,7 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-st.title("Girls Chatbot Demo (FastAPI Backend)")
+st.title("Girls Chatbot Demo")
 
 # --- Mood Mapping for Visualization ---
 MOOD_SCORE_MAP = {
@@ -262,10 +261,6 @@ for message in st.session_state.messages:
 # --- Chat Input and Logic ---
 prompt = st.chat_input("Type your message here...")
 
-# Modify the streaming chat section in your Streamlit app:
-
-# Modify the streaming chat section in your Streamlit app:
-
 if prompt:
     st.session_state.messages.append(Message(role="user", content=prompt))
     with st.chat_message("user"):
@@ -274,7 +269,7 @@ if prompt:
     chat_payload = {
         "user_id": st.session_state.mem0_session_id,
         "prompt": prompt,
-        "messages": [msg.dict() for msg in st.session_state.messages],
+        "messages": [msg.model_dump() for msg in st.session_state.messages],
         "selected_traits": st.session_state.selected_traits,
         "selected_formality": st.session_state.selected_formality,
         "selected_style": st.session_state.selected_style,

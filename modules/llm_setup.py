@@ -5,6 +5,7 @@ from modules.pydantic_models import UserProfile, ControversialTopicAttributes, M
 from pydantic import BaseModel, Field
 from typing import List
 from datetime import datetime, timedelta
+import json
 
 load_dotenv()
 
@@ -150,7 +151,8 @@ async def detect_controversial_topic(text: str) -> dict: # Made async
     Output should strictly adhere to the ControversialTopicAttributes Pydantic model.
     - Set 'is_controversial' to True if a controversial topic is detected.
     - Set 'category' to the primary controversial category (e.g., 'politics', 'religion', 'sexual', 'violence', 'hate_speech'). If multiple, pick the most dominant. If not controversial, set to 'none'.
-    - Provide a brief 'reason' if it is controversial.
+    - Provide a short "refusal_message" if it is controversial.
+    - "refusal_message" must naturally match the input message's language
     """
     try:
         controversial_analysis_raw = controversial_llm.invoke(prompt)
@@ -160,12 +162,12 @@ async def detect_controversial_topic(text: str) -> dict: # Made async
             return controversial_analysis_raw.model_dump()
         else:
             print(f"Warning: Controversial analysis result not a recognizable Pydantic model or dict with 'parsed'. Type: {type(controversial_analysis_raw)}")
-            return {"is_controversial": False, "category": "none", "reason": "Parsing issue or unknown format."}
+            return {"is_controversial": False, "category": "none", "refusal_message": "Parsing issue or unknown format."}
     except Exception as e:
         print(f"Error during controversial topic detection: {e}")
-        return {"is_controversial": False, "category": "none", "reason": f"Detection failed: {e}"}
+        return {"is_controversial": False, "category": "none", "refusal_message": f"Detection failed: {e}"}
 
-
+    
 def get_system_prompt_template():
     return """
     You are a chatbot persona. Your identity and behavior are defined by the following profile:

@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field
-from typing import Literal, Optional, List
+from typing import Literal, Optional
 
 class MoodAttributes(BaseModel):
     mood: Literal["joyful", "sad", "angry", "neutral", "confused", "excited", "anxious", "surprised", "disgusted", "fearful"] = Field(description="The primary emotion detected in the user's message.")
@@ -13,8 +13,6 @@ class IntentAttributes(BaseModel):
 
 class UserProfile(BaseModel):
     name: Optional[str] = Field(None, description="The user's name.")
-    # interests: List[str] = Field(default_factory=list, description="A list of the user's stated interests or hobbies.")
-    # preferences: List[str] = Field(default_factory=list, description="A list of other personal preferences of the user.")
     summary: Optional[str] = Field(None, description="A brief summary of the user's overall personal profile and psychological portrait.")
 
 # New Pydantic model for controversial topic detection
@@ -23,5 +21,6 @@ class ControversialTopicAttributes(BaseModel):
     category: Optional[Literal["politics", "religion", "sexual", "violence", "hate_speech", "none"]] = Field(
         None, description="The category of the controversial topic if detected, or 'none' if not controversial."
     )
-    reason: Optional[str] = Field(None, description="A brief explanation if the topic is controversial.")
+    refusal_message: Optional[str] = Field(None, description="A brief explanation of why it is impossible to talk about this controversial topic")
+
 

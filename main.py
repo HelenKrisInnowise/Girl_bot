@@ -1,33 +1,40 @@
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException, Request
 from pydantic import BaseModel
-from typing import List, Optional, Dict, Any, Annotated 
+from typing import List, Dict,  Annotated 
 import asyncio
-import uuid
 from datetime import datetime, timedelta
 from fastapi import Depends 
 from mem0 import AsyncMemoryClient
+from functools import wraps
+import logging
+import time
+from fastapi.responses import StreamingResponse
+import json
+from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
+from pydantic import BaseModel as PydanticBaseModel
+import warnings
 
-# Import client factory instead of direct clients
+
 from modules.mem0_config import create_mem0_clients
 
 from modules.llm_setup import (
     generate_dynamic_profile, get_user_personal_profile,generate_proactive_query, 
     detect_controversial_topic, get_system_prompt_template, llm, mood_llm
 )
-from modules.profiles import MAIN_CHARACTER_TRAITS, FORMALITY_LEVELS, COMMUNICATION_STYLES
-from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
-from pydantic import BaseModel as PydanticBaseModel
+
+warnings.filterwarnings("ignore", category=DeprecationWarning)
+logger = logging.getLogger(__name__)
 
 # --- Application Setup ---
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Initialize and store clients
+
     print("FastAPI startup: Initializing Mem0 clients...")
     app.state.mem0_client = await create_mem0_clients()
     print("FastAPI startup: Mem0 clients initialized.")
     yield
-    # Cleanup code could go here if needed
+
 
 app = FastAPI(title="Girls Chatbot", lifespan=lifespan)
 
@@ -64,8 +71,26 @@ class ChatResponse(PydanticBaseModel):
     messages: List[Message]
     relevant_memories_str: str
 
+def log_execution_time(func):
+    @wraps(func)
+    async def async_wrapper(*args, **kwargs):
+        start_time = time.time()
+        logger.info(f"Executing {func.__name__}")
+        try:
+            result = await func(*args, **kwargs)  # Note the await here
+        except Exception as e:
+            logger.error(f"Exception in {func.__name__}: {str(e)}", exc_info=True)
+            raise HTTPException(status_code=500, detail=str(e))
+        end_time = time.time()
+        execution_time = end_time - start_time
+        logger.info(f"{func.__name__} took {execution_time:.2f} seconds")
+        print(f"{func.__name__} took {execution_time:.2f} seconds")
+        return result
+    return async_wrapper
+
 # --- API Endpoints ---
 @app.post("/generate_persona")
+@log_execution_time
 async def generate_persona_endpoint(request: ProfileGenerateRequest):
     try:
         new_profile = await asyncio.to_thread(
@@ -79,6 +104,7 @@ async def generate_persona_endpoint(request: ProfileGenerateRequest):
         raise HTTPException(status_code=500, detail=f"Error generating persona: {e}")
 
 @app.post("/add_initial_memory")
+@log_execution_time
 async def add_initial_memory_endpoint(
     user_id: str, 
     description: str,
@@ -93,24 +119,23 @@ async def add_initial_memory_endpoint(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Could not add initial memory: {e}")
 
-from fastapi.responses import StreamingResponse
-import json
-
-from fastapi.responses import StreamingResponse
-import json
 
 @app.post("/chat_stream")
+@log_execution_time
 async def chat_endpoint_streaming(
     request: ChatRequest,
     mem0_client: AsyncMemoryClient = Depends(get_mem0_client),
 ):
+    
     async def generate():
         try:
             # Controversial topic detection
+            start_time = time.time()
             controversial_analysis_result = await detect_controversial_topic(request.prompt)
             if controversial_analysis_result.get('is_controversial'):
                 category = controversial_analysis_result.get('category', 'undefined')
-                refusal_message = f"I cannot discuss topics related to {category}..."
+                refusal_message = controversial_analysis_result.get('refusal_message', 'due to its content.')
+                refusal_message = f"{refusal_message}"
                 
                 await mem0_client.add(messages=[{
                     "role": "assistant", 
@@ -119,22 +144,30 @@ async def chat_endpoint_streaming(
                 
                 yield json.dumps({
                     "response": refusal_message,
-                    "messages": [msg.dict() for msg in request.messages] + [
+                        "messages": [msg.model_dump() for msg in request.messages] + [
                         {"role": "assistant", "content": refusal_message}
                     ],
                     "relevant_memories_str": "N/A"
                 }) + "\n"
+                print(f"Controversial topic detection took {time.time() - start_time:.2f}s")
                 return
-
-            # Store messages
-            await mem0_client.add(
-                messages=[{"role": "user", "content": request.prompt}],
-                user_id=request.user_id
-            )
-
+            
+            print(f"Controversial topic detection took {time.time() - start_time:.2f}s")
+            
+            try:
+                add_start_time = time.time()
+                await mem0_client.add(
+                    messages=[{"role": "user", "content": request.prompt}],
+                    user_id=request.user_id
+                )
+                print(f"Adding memory took {time.time() - add_start_time:.2f}s")
+            except Exception as e:
+                print(f"Could not add user message to Mem0 (Cloud Vector Database): {e}")
+                
             # Get relevant memories
             relevant_memories_str = "No relevant memories found."
             try:
+                search_start_time = time.time()
                 search_results = await mem0_client.search(
                     query=request.prompt,
                     user_id=request.user_id,
@@ -142,6 +175,7 @@ async def chat_endpoint_streaming(
                 )
                 if search_results:
                     relevant_memories_str = "\n".join([f"- {m['memory']}" for m in search_results])
+                print(f"searching memory took {time.time() - search_start_time:.2f}s")    
             except Exception as e:
                 print(f"Search error: {e}")
 
@@ -169,7 +203,7 @@ async def chat_endpoint_streaming(
                 full_response += content
                 yield json.dumps({
                     "response": content,
-                    "messages": [msg.dict() for msg in request.messages] + [
+                        "messages": [msg.model_dump() for msg in request.messages] + [
                         {"role": "assistant", "content": full_response}
                     ],
                     "relevant_memories_str": relevant_memories_str
@@ -180,10 +214,10 @@ async def chat_endpoint_streaming(
                 "error": str(e),
                 "status_code": 500
             }) + "\n"
-
     return StreamingResponse(generate(), media_type="text/event-stream")
 
 @app.post("/get_user_profile_vector")
+@log_execution_time
 async def get_user_profile_vector_endpoint(
     user_id: str,
     mem0_client: Annotated[AsyncMemoryClient, Depends(get_mem0_client)]
@@ -198,6 +232,7 @@ async def get_user_profile_vector_endpoint(
         )
 
 @app.post("/generate_proactive_query_vector")
+@log_execution_time
 async def generate_proactive_query_vector_endpoint(
     user_id: str,
     mem0_client: AsyncMemoryClient = Depends(get_mem0_client)
@@ -212,6 +247,7 @@ async def generate_proactive_query_vector_endpoint(
         )
 
 @app.post("/get_mood_history")
+@log_execution_time
 async def get_mood_history_endpoint(
     user_id: str,
     mem0_client: AsyncMemoryClient = Depends(get_mem0_client)

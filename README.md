@@ -1,4 +1,4 @@
-```markdown
+
 # Girls Chatbot Demo
 
 This project presents a Streamlit-based chatbot demonstration application that leverages advanced Mem0 memory features (with a Neo4j graph database and Mem0 Cloud vector database database), and an OpenAI LLM for dynamic persona configuration, mood analysis, and proactive interaction.
@@ -10,8 +10,6 @@ This project presents a Streamlit-based chatbot demonstration application that l
 - **Hybrid Mem0 Memory:** Utilizes both a local Neo4j graph database (running in Docker) for structured relationships like personal connections and events, and Mem0 Cloud vector database (for semantic search and general memory storage).
 - **User Profile:** Dynamically generated summary of the user's profile based on stored memories.
 - **Proactive Queries:** Two functions for re-engaging in conversation:
-  - **"Suggest a Topic"**: General topic suggestions (vector search).
-  - **"Generate Proactive Query (Graph Memory)"**: Personalized questions based on recent events and routines from the graph memory.
 - **Mood Change History:** Visualization of the user's mood dynamics over time.
 - **Content Moderation:** Filtering of controversial topics and potentially undesirable content.
 
@@ -29,7 +27,6 @@ To run this project, you will need:
 - **API Credentials:**
   - **OpenAI API Key:** For accessing OpenAI models (LLM and embeddings).
   - **Mem0 API Key:** For accessing Mem0 Cloud services.
-  - **Neo4j Credentials:** You will define these for your local Neo4j instance in the `.env` file (username `neo4j`, and a password you choose).
 
 *(Optional for developers: Python 3.11+ and uv for local development outside Docker.)*
 
@@ -40,10 +37,10 @@ To run this project, you will need:
 ### 1. Clone the repository
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/girl-chatbot-demo.git
-cd girl-chatbot-demo
+git clone --branch feature/Async_Vector_Streaming --single-branch https://github.com/HelenKrisInnowise/Girl_bot.git
+
+cd Girl_bot
 ```
-*(Replace `YOUR_USERNAME/girl-chatbot-demo.git` with the actual URL of your repository.)*
 
 ### 2. Configure environment variables
 
@@ -55,10 +52,6 @@ Fill in `.env` with your actual API keys and define your local Neo4j credentials
 # .env
 OPENAI_API_KEY="YOUR_OPENAI_API_KEY"
 MEM0_API_KEY="YOUR_MEM0_API_KEY"
-NEO4J_URI="bolt://neo4j:7687" 
-NEO4J_USER="neo4j"
-NEO4J_PASSWORD="YOUR_CHOSEN_NEO4J_PASSWORD" Neo4j
-NEO4J_DATABASE="neo4j"
 ```
 
 **ATTENTION:** This `.env` file contains your secrets. **NEVER commit it to Git!**
@@ -74,14 +67,12 @@ docker compose up --build
 This command will:
 
 - Build the Docker images (if not already built or if there are changes).
-- Start all services defined in `docker-compose.yml` (your application, local Neo4j, and Qdrant).
+- Start all services defined in `docker-compose.yml` (your application, local Qdrant).
 
-**Note on Neo4j:**  
-This command will start a new, local Neo4j database server within a Docker container. You do **not** need to run Neo4j Desktop or any other Neo4j application separately.
 
 ### 4. Access the application
 
-After all services have started (this may take a few minutes, especially during the first launch of Neo4j and Qdrant), your Streamlit application will be accessible at:
+After all services have started (this may take a few minutes, especially during the first launch of Qdrant), your Streamlit application will be accessible at:
 
 [http://localhost:8501](http://localhost:8501)
 
@@ -106,10 +97,6 @@ pip install -e .
 ```
 
 ### Database Inspection
-
-- **Neo4j Browser:**  
-  After running `docker compose up`, you can access the Neo4j Browser at [http://localhost:7474](http://localhost:7474).  
-  Use the credentials you defined in your `.env` file (`neo4j` as user, your password) to log in.
 
 - **Qdrant UI:**  
   If you are using Qdrant and expose its UI port (usually `6333` or `6334`), you can also access it locally.
