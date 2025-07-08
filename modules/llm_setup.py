@@ -87,11 +87,12 @@ async def get_user_personal_profile(mem0_client_instance, user_id: str) -> dict:
     prompt = f"""
     Based on the following fragmented user memories, synthesize a coherent User Personal Profile.
     Extract the user's name, a list of their main interests, a list of other general preferences, and a brief overall summary.
+    
 
     User Memories:
     {memories_text}
 
-    Output should strictly adhere to the UserProfile Pydantic model.
+    Output should strictly adhere to the UserProfile Pydantic model and it must naturally match the User Memories's language.
     """
     try:
         profile_summary = user_profile_llm.invoke(prompt)
@@ -109,7 +110,9 @@ async def generate_proactive_query(mem0_client_instance, user_id: str) -> str: #
             {"created_at": {"gte": ten_days_ago_iso}},
             {"OR": [
                 {"categories": {"contains": "life_events"}},
-                {"categories": {"contains": "daily_routine"}}
+                {"categories": {"contains": "daily_routine"}},
+                {"categories": {"contains": "relationships"}}, 
+                {"categories": {"contains": "professional_details"}},
             ]}
         ]
     }
@@ -124,7 +127,7 @@ async def generate_proactive_query(mem0_client_instance, user_id: str) -> str: #
     Based on the following recent memories about the user's life events and daily routines,
     formulate a message with a question or a phrase implying a response.
     The goal is to proactively and empathetically re-engage the user, as if you haven't chatted for a while.
-    Make the message sound natural, friendly, and caring.
+    Make the message sound natural, friendly, and caring, it must naturally match the User Memories's language.
 
     Recent User Memories (from last 10 days):
     {memories_content}

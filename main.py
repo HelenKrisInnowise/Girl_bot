@@ -137,11 +137,6 @@ async def chat_endpoint_streaming(
                 refusal_message = controversial_analysis_result.get('refusal_message', 'due to its content.')
                 refusal_message = f"{refusal_message}"
                 
-                await mem0_client.add(messages=[{
-                    "role": "assistant", 
-                    "content": f"Refused to discuss: {category} for message: '{request.prompt}'"
-                }], user_id=request.user_id)
-                
                 yield json.dumps({
                     "response": refusal_message,
                         "messages": [msg.model_dump() for msg in request.messages] + [
@@ -154,32 +149,17 @@ async def chat_endpoint_streaming(
             
             print(f"Controversial topic detection took {time.time() - start_time:.2f}s")
             
-            try:
-                add_start_time = time.time()
-                await mem0_client.add(
-                    messages=[{"role": "user", "content": request.prompt}],
-                    user_id=request.user_id
-                )
-                print(f"Adding memory took {time.time() - add_start_time:.2f}s")
-            except Exception as e:
-                print(f"Could not add user message to Mem0 (Cloud Vector Database): {e}")
-                
-            # Get relevant memories
-            relevant_memories_str = "No relevant memories found."
-            try:
-                search_start_time = time.time()
-                search_results = await mem0_client.search(
-                    query=request.prompt,
-                    user_id=request.user_id,
-                    limit=3
-                )
-                if search_results:
-                    relevant_memories_str = "\n".join([f"- {m['memory']}" for m in search_results])
-                print(f"searching memory took {time.time() - search_start_time:.2f}s")    
-            except Exception as e:
-                print(f"Search error: {e}")
+            # --- Start operations with Mem0 in parallel ---
+            # Start adding memory in the background. Its result is not needed immediately.
+            add_task = asyncio.create_task(add_memory_to_mem0(mem0_client, request.prompt, request.user_id))
+            
+            # Start searching for relevant memories. The result will be needed for system_message.
+            search_task = asyncio.create_task(search_mem0_for_relevant_memories(mem0_client, request.prompt, request.user_id))
 
-            # Prepare system message
+            # Wait for the memory search results, as they are needed for system_message
+            relevant_memories_str = await search_task 
+            
+            # Now that we have relevant_memories_str, we can prepare system_message
             system_message_content = get_system_prompt_template().format(
                 persona_name="Dynamically Generated Persona",
                 profile_description=request.dynamic_profile['description'],
@@ -209,12 +189,45 @@ async def chat_endpoint_streaming(
                     "relevant_memories_str": relevant_memories_str
                 }) + "\n"
 
+           # Wait for the background task to add memory to complete
+            await add_task
+
         except Exception as e:
             yield json.dumps({
                 "error": str(e),
                 "status_code": 500
             }) + "\n"
     return StreamingResponse(generate(), media_type="text/event-stream")
+
+
+# Helper functions to encapsulate Mem0 logic
+async def add_memory_to_mem0(client: AsyncMemoryClient, prompt: str, user_id: str):
+    add_start_time = time.time()
+    try:
+        await client.add(
+            messages=[{"role": "user", "content": prompt}],
+            user_id=user_id
+        )
+        print(f"Adding memory took {time.time() - add_start_time:.2f}s")
+    except Exception as e:
+        print(f"Could not add user message to Mem0 (Cloud Vector Database): {e}")
+
+async def search_mem0_for_relevant_memories(client: AsyncMemoryClient, query: str, user_id: str) -> str:
+    relevant_memories_str = "No relevant memories found."
+    search_start_time = time.time()
+    try:
+        search_results = await client.search(
+            query=query,
+            user_id=user_id,
+            limit=3
+        )
+        if search_results:
+            relevant_memories_str = "\n".join([f"- {m['memory']}" for m in search_results])
+        print(f"searching memory took {time.time() - search_start_time:.2f}s")    
+    except Exception as e:
+        print(f"Search error: {e}")
+    return relevant_memories_str
+
 
 @app.post("/get_user_profile_vector")
 @log_execution_time
