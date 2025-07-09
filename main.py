@@ -5,7 +5,7 @@ from typing import List, Dict,  Annotated
 import asyncio
 from datetime import datetime, timedelta
 from fastapi import Depends 
-from mem0 import AsyncMemoryClient
+from mem0 import AsyncMemoryClient, AsyncMemory  
 from functools import wraps
 import logging
 import time
@@ -19,7 +19,8 @@ import warnings
 from modules.mem0_config import create_mem0_clients
 
 from modules.llm_setup import (
-    generate_dynamic_profile, get_user_personal_profile,generate_proactive_query, 
+    generate_dynamic_profile, get_user_personal_profile, get_user_personal_profile_graph,
+    generate_proactive_query, generate_proactive_query_graph,
     detect_controversial_topic, get_system_prompt_template, llm, mood_llm
 )
 
@@ -31,7 +32,7 @@ logger = logging.getLogger(__name__)
 async def lifespan(app: FastAPI):
 
     print("FastAPI startup: Initializing Mem0 clients...")
-    app.state.mem0_client = await create_mem0_clients()
+    app.state.mem0_client, app.state.graph_mem0_client = await create_mem0_clients()
     print("FastAPI startup: Mem0 clients initialized.")
     yield
 
@@ -40,6 +41,9 @@ app = FastAPI(title="Girls Chatbot", lifespan=lifespan)
 
 async def get_mem0_client(request: Request) -> AsyncMemoryClient:
     return request.app.state.mem0_client
+
+async def get_graph_client(request: Request) -> AsyncMemory:
+    return request.app.state.graph_mem0_client
 
 # --- Pydantic Models ---
 class Message(BaseModel):
@@ -125,6 +129,7 @@ async def add_initial_memory_endpoint(
 async def chat_endpoint_streaming(
     request: ChatRequest,
     mem0_client: AsyncMemoryClient = Depends(get_mem0_client),
+    graph_mem0_client: AsyncMemory = Depends(get_graph_client)
 ):
     
     async def generate():
@@ -153,6 +158,7 @@ async def chat_endpoint_streaming(
             # Start adding memory in the background. Its result is not needed immediately.
             add_task = asyncio.create_task(add_memory_to_mem0(mem0_client, request.prompt, request.user_id))
             
+            graph_add_task = asyncio.create_task(add_memory_to_graph(graph_mem0_client, request.prompt, request.user_id))
             # Start searching for relevant memories. The result will be needed for system_message.
             search_task = asyncio.create_task(search_mem0_for_relevant_memories(mem0_client, request.prompt, request.user_id))
 
@@ -190,7 +196,7 @@ async def chat_endpoint_streaming(
                 }) + "\n"
 
            # Wait for the background task to add memory to complete
-            await add_task
+            await add_task, graph_add_task 
 
         except Exception as e:
             yield json.dumps({
@@ -211,7 +217,16 @@ async def add_memory_to_mem0(client: AsyncMemoryClient, prompt: str, user_id: st
         print(f"Adding memory took {time.time() - add_start_time:.2f}s")
     except Exception as e:
         print(f"Could not add user message to Mem0 (Cloud Vector Database): {e}")
-
+        
+async def add_memory_to_graph(client: AsyncMemory, prompt: str, user_id: str):
+    add_start_time = time.time()
+    try:
+        await client.add(prompt,user_id=user_id
+        )
+        print(f"Adding Graph memory took {time.time() - add_start_time:.2f}s")
+    except Exception as e:
+        print(f"Could not add user message to Mem0 Graph: {e}")
+        
 async def search_mem0_for_relevant_memories(client: AsyncMemoryClient, query: str, user_id: str) -> str:
     relevant_memories_str = "No relevant memories found."
     search_start_time = time.time()
@@ -244,6 +259,48 @@ async def get_user_profile_vector_endpoint(
             detail=f"Error fetching/summarizing vector profile: {str(e)}"
         )
 
+@app.post("/get_user_profile_graph")
+async def get_user_profile_graph_endpoint(
+    user_id: str,
+    graph_mem0_client: AsyncMemory = Depends(get_graph_client)
+):
+    try:
+        profile_summary = await get_user_personal_profile_graph(graph_mem0_client, user_id)
+        return {"profile_summary_graph": profile_summary}
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error fetching/summarizing graph profile: {str(e)}"
+        )
+
+@app.post("/generate_proactive_query_vector")
+async def generate_proactive_query_vector_endpoint(
+    user_id: str,
+    mem0_client: AsyncMemoryClient = Depends(get_mem0_client)
+):
+    try:
+        proactive_query = await generate_proactive_query(mem0_client, user_id)
+        return {"proactive_query": proactive_query}
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error generating proactive query (Vector): {str(e)}"
+        )
+
+@app.post("/generate_proactive_query_graph")
+async def generate_proactive_query_graph_endpoint(
+    user_id: str,
+    graph_mem0_client: AsyncMemory = Depends(get_graph_client)
+):
+    try:
+        proactive_query = await generate_proactive_query_graph(graph_mem0_client, user_id)
+        return {"proactive_query": proactive_query}
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error generating proactive query (Graph): {str(e)}"
+        )
+        
 @app.post("/generate_proactive_query_vector")
 @log_execution_time
 async def generate_proactive_query_vector_endpoint(

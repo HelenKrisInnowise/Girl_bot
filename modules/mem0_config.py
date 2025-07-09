@@ -1,6 +1,8 @@
 import os
 from dotenv import load_dotenv
 from mem0 import AsyncMemoryClient
+from mem0 import AsyncMemory 
+from mem0.configs.base import MemoryConfig
 
 
 load_dotenv()
@@ -11,6 +13,11 @@ os.environ["OPENAI_API_KEY"] = os.getenv("OPENAI_API_KEY")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 MEM0_API_KEY = os.getenv("MEM0_API_KEY") # Ensure MEM0_API_KEY is loaded for mem0 cloud vector store
 OPENAI_EMBEDDING_MODEL_DEPLOYMENT_NAME = os.getenv("OPENAI_EMBEDDING_MODEL_DEPLOYMENT_NAME") # For explicit embedder config
+# NEO4J_URI = os.getenv("NEO4J_URI")
+NEO4J_URI="bolt://localhost:7687"
+NEO4J_USER = os.getenv("NEO4J_USER")
+NEO4J_PASSWORD = os.getenv("NEO4J_PASSWORD")
+NEO4J_DATABASE = os.getenv("NEO4J_DATABASE")
 
 # Basic validation for critical keys
 if not OPENAI_API_KEY:
@@ -115,16 +122,36 @@ mem0_cloud_config = {
         }
     },
 }
+mem0_graph_config = {
+    "graph_store": {
+        "provider": "neo4j",
+        "config": {
+            "url": os.getenv("NEO4J_URI", "bolt://neo4j:7687"),  # Fallback to default if not set
+            "username": os.getenv("NEO4J_USER", "neo4j"),  # Default user is 'neo4j'
+            "password": os.getenv("NEO4J_PASSWORD"),  # Required, no default
+            "database": os.getenv("NEO4J_DATABASE", "neo4j"),  # Fallback to default DB
+        }
+    },
+    "embedding": {
+        "model": "text-embedding-3-small"
+    },
+    "version": "v1.1"
+}
+# Initialize MemoryConfig with your custom config
+custom_config = MemoryConfig(config=mem0_graph_config)
+
 
 mem0_client = None
+graph_mem0_client = None
+
 
 async def create_mem0_clients():
     """Factory function to create and initialize clients"""
     mem0_client = AsyncMemoryClient(api_key=os.getenv("MEM0_API_KEY"))
- 
+    graph_mem0_client = AsyncMemory(config=custom_config)
     
     await mem0_client.update_project(
         custom_categories=MEM0_CUSTOM_CATEGORIES,
         custom_instructions=MEM0_CUSTOM_INSTRUCTIONS
     )
-    return mem0_client
+    return mem0_client, graph_mem0_client
