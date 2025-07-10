@@ -1,8 +1,36 @@
+# docker-compose.yaml
 version: '3.8'
 
 services:
+  # Service for the local Neo4j database
+  neo4j:
+    image: krishelen/girl-chatbot-neo4j:latest
+    hostname: neo4j
+    container_name: neo4j-db
+    ports:
+      - "7474:7474" # Neo4j Browser UI
+      - "7687:7687" # Bolt port for connection
+    environment:
+      - NEO4J_AUTH=neo4j/${NEO4J_PASSWORD} # Authentication: neo4j/your_password
+      - NEO4J_dbms_default_database=${NEO4J_DATABASE} # Corrected variable name for newer Neo4j versions
+      - NEO4J_apoc_export_file_enabled=true
+      - NEO4J_apoc_import_file_enabled=true
+      - NEO4J_apoc_uuid_enabled=true
+      - NEO4J_dbms_security_procedures_unrestricted=apoc.*,algo.* # Allow APOC procedures
+    volumes:
+      - ./data/neo4j:/data # Persistent storage for Neo4j data on the host
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:7474 || exit 1"] # Use http for healthcheck
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # Qdrant service is removed as per your request.
+
   # FastAPI Backend
   backend:
+    image: krishelen/girl-chatbot-fastapi-backend:latest
     build:
       context: .
       dockerfile: Dockerfile.backend 
@@ -13,11 +41,29 @@ services:
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - MEM0_API_KEY=${MEM0_API_KEY}
       - FASTAPI_ENV=production
-    command: uvicorn main:app --host 0.0.0.0 --port 8000 
+      # Connection settings for Neo4j (internal Docker network)
+      - NEO4J_URI=bolt://neo4j:7687 # Connect to Neo4j container
+      - NEO4J_USER=${NEO4J_USER}
+      - NEO4J_PASSWORD=${NEO4J_PASSWORD}
+      - NEO4J_DATABASE=${NEO4J_DATABASE}
+      # QDRANT_URL is removed as Qdrant is no longer used.
+      - FASTAPI_BACKEND_URL=http://backend:8000 # Internal URL for FastAPI
+    depends_on:
+      neo4j:
+        condition: service_healthy # Backend starts after Neo4j is healthy
+      # Removed dependency on qdrant
+    command: uvicorn main:app --host 0.0.0.0 --port 8000 --workers 1 # Removed --reload for production
     restart: unless-stopped
+    healthcheck: # Healthcheck for FastAPI backend
+      test: ["CMD-SHELL", "curl -f http://localhost:8000/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s # Give time for FastAPI to start up
 
   # Streamlit Frontend
   app:
+    image: krishelen/girl-chatbot-streamlit-frontend:latest
     build:
       context: .
       dockerfile: Dockerfile.app 
@@ -25,8 +71,10 @@ services:
     ports:
       - "8501:8501"
     environment:
-      - BACKEND_URL=http://backend:8000 
+      - FASTAPI_BACKEND_URL=http://backend:8000 # Connect to FastAPI backend container
+      # Frontend doesn't need OpenAI/Mem0 keys directly, as it calls backend
     depends_on:
-      - backend 
+      backend:
+        condition: service_healthy # Frontend starts after backend is healthy
     command: streamlit run app.py --server.port 8501 --server.address 0.0.0.0 
     restart: unless-stopped
