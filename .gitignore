@@ -12,3 +12,6 @@ wheels/
 experiments/
 
 .env
+
+docker/
+data/
