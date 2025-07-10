@@ -4,7 +4,7 @@ version: '3.8'
 services:
   # Service for the local Neo4j database
   neo4j:
-    image: krishelen/girl-chatbot-neo4j:latest
+    image: neo4j:latest # CORRECTED: Use official image name, not your Docker Hub username
     hostname: neo4j
     container_name: neo4j-db
     ports:
@@ -26,11 +26,26 @@ services:
       retries: 5
     restart: unless-stopped
 
-  # Qdrant service is removed as per your request.
+  # Service for Qdrant vector database (local)
+  qdrant:
+    image: qdrant/qdrant:latest # CORRECTED: Use official image name, not your Docker Hub username
+    hostname: qdrant
+    container_name: qdrant-db
+    ports:
+      - "6333:6333" # Qdrant API port
+      - "6334:6334" # Qdrant gRPC port
+    volumes:
+      - ./data/qdrant:/qdrant/storage # Persistent storage
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:6333/health || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
 
   # FastAPI Backend
   backend:
-    image: krishelen/girl-chatbot-fastapi-backend:latest
+    image: krishelen/girl-chatbot-fastapi-backend:latest # This one is built by you
     build:
       context: .
       dockerfile: Dockerfile.backend 
@@ -41,17 +56,18 @@ services:
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - MEM0_API_KEY=${MEM0_API_KEY}
       - FASTAPI_ENV=production
-      # Connection settings for Neo4j (internal Docker network)
+      # Connection settings for Neo4j and Qdrant (internal Docker network)
       - NEO4J_URI=bolt://neo4j:7687 # Connect to Neo4j container
       - NEO4J_USER=${NEO4J_USER}
       - NEO4J_PASSWORD=${NEO4J_PASSWORD}
       - NEO4J_DATABASE=${NEO4J_DATABASE}
-      # QDRANT_URL is removed as Qdrant is no longer used.
+      - QDRANT_URL=http://qdrant:6333 # Connect to Qdrant container
       - FASTAPI_BACKEND_URL=http://backend:8000 # Internal URL for FastAPI
     depends_on:
       neo4j:
         condition: service_healthy # Backend starts after Neo4j is healthy
-      # Removed dependency on qdrant
+      qdrant:
+        condition: service_healthy # Backend starts after Qdrant is healthy
     command: uvicorn main:app --host 0.0.0.0 --port 8000 --workers 1 # Removed --reload for production
     restart: unless-stopped
     healthcheck: # Healthcheck for FastAPI backend
@@ -63,7 +79,7 @@ services:
 
   # Streamlit Frontend
   app:
-    image: krishelen/girl-chatbot-streamlit-frontend:latest
+    image: krishelen/girl-chatbot-streamlit-frontend:latest # This one is built by you
     build:
       context: .
       dockerfile: Dockerfile.app 
