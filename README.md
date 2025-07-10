@@ -97,4 +97,12 @@ pip install -e .
 ```
 
 This updated `README.md` now clearly explains how to set up and run the application with a local Neo4j instance managed by Docker Compose.
+
+Database Inspection
+Neo4j Browser:
+After running docker compose up, you can access the Neo4j Browser at http://localhost:7474.
+Use the credentials you defined in your .env file (neo4j as user, your password) to log in.
+
+Qdrant UI:
+If you are using Qdrant and expose its UI port (usually 6333 or 6334), you can also access it locally.
 ```

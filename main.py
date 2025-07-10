@@ -38,6 +38,11 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="Girls Chatbot", lifespan=lifespan)
+# --- Health Check Endpoint ---
+@app.get("/health")
+async def health_check():
+    """Simple health check endpoint."""
+    return {"status": "healthy"}
 
 async def get_mem0_client(request: Request) -> AsyncMemoryClient:
     return request.app.state.mem0_client
@@ -108,7 +113,6 @@ async def generate_persona_endpoint(request: ProfileGenerateRequest):
         raise HTTPException(status_code=500, detail=f"Error generating persona: {e}")
 
 @app.post("/add_initial_memory")
-@log_execution_time
 async def add_initial_memory_endpoint(
     user_id: str, 
     description: str,
@@ -125,7 +129,6 @@ async def add_initial_memory_endpoint(
 
 
 @app.post("/chat_stream")
-@log_execution_time
 async def chat_endpoint_streaming(
     request: ChatRequest,
     mem0_client: AsyncMemoryClient = Depends(get_mem0_client),
@@ -245,7 +248,6 @@ async def search_mem0_for_relevant_memories(client: AsyncMemoryClient, query: st
 
 
 @app.post("/get_user_profile_vector")
-@log_execution_time
 async def get_user_profile_vector_endpoint(
     user_id: str,
     mem0_client: Annotated[AsyncMemoryClient, Depends(get_mem0_client)]
@@ -287,7 +289,7 @@ async def generate_proactive_query_vector_endpoint(
             detail=f"Error generating proactive query (Vector): {str(e)}"
         )
 
-@app.post("/generate_proactive_query_graph")
+@app.post("/generate_proactive_query_graph", operation_id="generate_graph_query")
 async def generate_proactive_query_graph_endpoint(
     user_id: str,
     graph_mem0_client: AsyncMemory = Depends(get_graph_client)
@@ -301,8 +303,7 @@ async def generate_proactive_query_graph_endpoint(
             detail=f"Error generating proactive query (Graph): {str(e)}"
         )
         
-@app.post("/generate_proactive_query_vector")
-@log_execution_time
+@app.post("/generate_proactive_query_vector", operation_id="generate_vector_query")
 async def generate_proactive_query_vector_endpoint(
     user_id: str,
     mem0_client: AsyncMemoryClient = Depends(get_mem0_client)

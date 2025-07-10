@@ -12,7 +12,7 @@ services:
       - "7687:7687" # Bolt port for connection
     environment:
       - NEO4J_AUTH=neo4j/${NEO4J_PASSWORD} # Authentication: neo4j/your_password
-      - NEO4J_dbms_default_database=${NEO4J_DATABASE} # Corrected variable name for newer Neo4j versions
+      # - NEO4J_dbms_default_database=${NEO4J_DATABASE} # Corrected variable name for newer Neo4j versions
       - NEO4J_apoc_export_file_enabled=true
       - NEO4J_apoc_import_file_enabled=true
       - NEO4J_apoc_uuid_enabled=true
@@ -26,22 +26,22 @@ services:
       retries: 5
     restart: unless-stopped
 
-  # Service for Qdrant vector database (local)
-  qdrant:
-    image: qdrant/qdrant:latest # CORRECTED: Use official image name, not your Docker Hub username
-    hostname: qdrant
-    container_name: qdrant-db
-    ports:
-      - "6333:6333" # Qdrant API port
-      - "6334:6334" # Qdrant gRPC port
-    volumes:
-      - ./data/qdrant:/qdrant/storage # Persistent storage
-    healthcheck:
-      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:6333/health || exit 1"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
-    restart: unless-stopped
+  # # Service for Qdrant vector database (local)
+  # qdrant:
+  #   image: qdrant/qdrant:latest # CORRECTED: Use official image name, not your Docker Hub username
+  #   hostname: qdrant
+  #   container_name: qdrant-db
+  #   ports:
+  #     - "6333:6333" # Qdrant API port
+  #     - "6334:6334" # Qdrant gRPC port
+  #   volumes:
+  #     - ./data/qdrant:/qdrant/storage # Persistent storage
+  #   healthcheck:
+  #     test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:6333/health || exit 1"]
+  #     interval: 5s
+  #     timeout: 5s
+  #     retries: 5
+  #   restart: unless-stopped
 
   # FastAPI Backend
   backend:
@@ -61,13 +61,13 @@ services:
       - NEO4J_USER=${NEO4J_USER}
       - NEO4J_PASSWORD=${NEO4J_PASSWORD}
       - NEO4J_DATABASE=${NEO4J_DATABASE}
-      - QDRANT_URL=http://qdrant:6333 # Connect to Qdrant container
+      # - QDRANT_URL=http://qdrant:6333 # Connect to Qdrant container
       - FASTAPI_BACKEND_URL=http://backend:8000 # Internal URL for FastAPI
     depends_on:
       neo4j:
         condition: service_healthy # Backend starts after Neo4j is healthy
-      qdrant:
-        condition: service_healthy # Backend starts after Qdrant is healthy
+      # qdrant:
+      #   condition: service_healthy # Backend starts after Qdrant is healthy
     command: uvicorn main:app --host 0.0.0.0 --port 8000 --workers 1 # Removed --reload for production
     restart: unless-stopped
     healthcheck: # Healthcheck for FastAPI backend
