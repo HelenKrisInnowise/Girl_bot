@@ -221,12 +221,21 @@ async def add_memory_to_mem0(client: AsyncMemoryClient, prompt: str, user_id: st
 async def add_memory_to_graph(client: AsyncMemory, prompt: str, user_id: str):
     add_start_time = time.time()
     try:
-        await client.add(prompt,user_id=user_id
-        )
-        print(f"Adding Graph memory took {time.time() - add_start_time:.2f}s")
+        add_response = await client.add(prompt,user_id=user_id) # Capture response
+        print(f"Adding Graph memory took {time.time() - add_start_time:.2f}s. Response: {add_response}")
+        # Check if the response indicates success or if any memory was actually created/updated
+        if add_response and add_response.get('status') == 'success' and add_response.get('memory_id'):
+            print(f"Successfully added to graph. Memory ID: {add_response['memory_id']}")
+        else:
+            # If the response indicates a problem, raise an exception or log more severely
+            # This will now raise an exception if status is not 'success' or memory_id is missing
+            raise Exception(f"Graph add operation completed, but response indicates potential issue: {add_response}")
     except Exception as e:
-        print(f"Could not add user message to Mem0 Graph: {e}")
-        
+        print(f"ERROR: Could not add user message to Mem0 Graph: {e}")
+        raise # Re-raise the exception to propagate it up for better debugging
+
+
+                
 async def search_mem0_for_relevant_memories(client: AsyncMemoryClient, query: str, user_id: str) -> str:
     relevant_memories_str = "No relevant memories found."
     search_start_time = time.time()

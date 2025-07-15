@@ -140,6 +140,7 @@ if st.sidebar.button("Generate Persona"):
                 st.session_state.user_profile_summary_graph = None
                 st.session_state.mood_history_data = None
                 st.session_state.proactive_query_suggestion_vector = None
+                st.session_state.proactive_query_suggestion_graph = None
 
 
                 # Add initial memory for new persona
@@ -213,6 +214,47 @@ if st.sidebar.button("Generate Proactive Query (Vector)"):
         except Exception as e:
             st.sidebar.error(f"Error generating query: {e}")
 
+
+##########################################################################
+if st.sidebar.button("Show/Update My Graph Profile"):
+    with st.spinner("Fetching and summarizing your profile from graph memory..."):
+        try:
+            with httpx.Client(timeout=120.0) as client:
+                response = client.post(f"{FASTAPI_BACKEND_URL}/get_user_profile_graph", 
+                                       params={"user_id": st.session_state.mem0_session_id})
+                response.raise_for_status()
+                st.session_state.user_profile_summary_graph = response.json()["profile_summary_graph"]
+            st.sidebar.success("User graph profile updated!")
+        except httpx.HTTPStatusError as e:
+            st.sidebar.error(f"Error fetching/summarizing graph profile: {e.response.text}")
+        except Exception as e:
+            st.sidebar.error(f"Error fetching/summarizing graph profile: {e}")
+
+if st.session_state.user_profile_summary_graph:
+    profile = st.session_state.user_profile_summary_graph
+    st.sidebar.markdown(f"**Name (Graph):** {profile['name'] if profile['name'] else 'Not found'}")
+    st.sidebar.markdown(f"**Summary (Graph):** {profile['summary']}")
+else:
+    st.sidebar.info("Click 'Show/Update My Graph Profile' to generate your personal profile based on graph memory.")
+
+#######################################################################################
+if st.sidebar.button("Generate Proactive Query (Graph Memory)"):
+    with st.spinner("Thinking of a proactive query from graph memory..."):
+        try:
+            with httpx.Client(timeout=120.0) as client:
+                response = client.post(f"{FASTAPI_BACKEND_URL}/generate_proactive_query_graph", 
+                                       params={"user_id": st.session_state.mem0_session_id})
+                response.raise_for_status()
+                st.session_state.proactive_query_suggestion_graph = response.json()["proactive_query"]
+            st.sidebar.info(f"**Proactive Query (Graph Memory):** {st.session_state.proactive_query_suggestion_graph}")
+        except httpx.HTTPStatusError as e:
+            st.sidebar.error(f"Error generating proactive query (Graph): {e.response.text}")
+        except Exception as e:
+            st.sidebar.error(f"Error generating proactive query (Graph): {e}")
+
+if st.session_state.proactive_query_suggestion_graph:
+    st.sidebar.markdown(f"**Last Proactive Query (Graph):** {st.session_state.proactive_query_suggestion_graph}")
+#################################################################################################################    
 # --- Mood History Section ---
 st.sidebar.markdown("---")
 st.sidebar.subheader("User Mood History")
